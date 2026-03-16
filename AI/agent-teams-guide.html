@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Teams — Hướng dẫn từng bước</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #f5f4f0;
+  --paper: #fafaf8;
+  --ink: #1a1a1a;
+  --ink2: #4a4a4a;
+  --ink3: #888;
+  --border: #ddd;
+  --accent: #0f766e;       /* teal — khác với guide trước để phân biệt */
+  --accent-light: #f0fdfa;
+  --accent-border: #99f6e4;
+  --blue: #2563eb;
+  --blue-light: #eff6ff;
+  --green: #16a34a;
+  --green-light: #f0fdf4;
+  --orange: #ea580c;
+  --orange-light: #fff7ed;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --purple: #7c3aed;
+  --purple-light: #f5f3ff;
+  --code-bg: #1e1e2e;
+  --code-text: #cdd6f4;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.7;
+}
+
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+/* TOC */
+.toc {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  padding: 32px 20px;
+  background: var(--paper);
+  border-right: 1px solid var(--border);
+}
+.toc-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--ink3); margin-bottom: 16px; }
+.toc-item {
+  display: block; padding: 5px 8px; font-size: 13px; color: var(--ink2);
+  text-decoration: none; border-radius: 4px; transition: all 0.1s;
+  border-left: 2px solid transparent;
+}
+.toc-item:hover { color: var(--accent); background: var(--accent-light); }
+.toc-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-light); font-weight: 600; }
+.toc-sub { padding-left: 18px; font-size: 12px; }
+.toc-sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+/* Main */
+.main { padding: 48px 64px 80px; max-width: 820px; }
+
+.doc-header { margin-bottom: 48px; padding-bottom: 32px; border-bottom: 2px solid var(--ink); }
+.doc-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  color: var(--accent); background: var(--accent-light);
+  border: 1px solid var(--accent-border);
+  padding: 3px 10px; border-radius: 100px; margin-bottom: 16px;
+}
+.doc-header h1 { font-size: 36px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; margin-bottom: 12px; }
+.doc-header p { font-size: 16px; color: var(--ink2); max-width: 580px; }
+.doc-header .upgrade-note {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 16px; padding: 8px 14px; border-radius: 8px;
+  background: #fef9c3; border: 1px solid #fde047;
+  font-size: 13px; color: #713f12;
+}
+
+.section { margin-bottom: 64px; scroll-margin-top: 24px; }
+h2 {
+  font-size: 24px; font-weight: 700; letter-spacing: -0.5px;
+  margin-bottom: 16px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.h2-num {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+  background: var(--accent); color: white;
+  padding: 2px 8px; border-radius: 4px;
+}
+h3 { font-size: 17px; font-weight: 600; margin: 28px 0 10px; }
+p { color: var(--ink2); margin-bottom: 14px; font-size: 15px; }
+
+/* Steps */
+.steps { margin: 24px 0; }
+.step { display: flex; gap: 20px; margin-bottom: 32px; position: relative; }
+.step-left { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+.step-num {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--ink); color: white;
+  font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;
+}
+.step-line { width: 2px; flex: 1; background: #cbd5e1; margin-top: 4px; min-height: 20px; }
+.step:last-child .step-line { display: none; }
+.step-body { flex: 1; padding-top: 6px; }
+.step-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.step-desc { font-size: 14px; color: var(--ink2); margin-bottom: 10px; }
+
+/* Code */
+pre {
+  background: var(--code-bg); border-radius: 8px;
+  padding: 18px 20px; overflow-x: auto; margin: 12px 0 16px;
+}
+code { font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.7; color: var(--code-text); }
+.inline-code {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+  background: #e8e8e8; color: var(--ink); padding: 1px 6px; border-radius: 3px;
+}
+.c { color: #585b70; font-style: italic; }
+.k { color: #cba6f7; }
+.s { color: #a6e3a1; }
+.v { color: #fab387; }
+.h { color: #89b4fa; }
+
+/* Callouts */
+.note {
+  display: flex; gap: 12px;
+  padding: 14px 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;
+}
+.note.tip { background: var(--green-light); border: 1px solid #bbf7d0; color: #15803d; }
+.note.warn { background: var(--orange-light); border: 1px solid #fed7aa; color: #9a3412; }
+.note.info { background: var(--accent-light); border: 1px solid var(--accent-border); color: #065f46; }
+.note.danger { background: var(--red-light); border: 1px solid #fecaca; color: #991b1b; }
+.note.new { background: #fef9c3; border: 1px solid #fde047; color: #713f12; }
+.note-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: var(--bg); padding: 8px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ink3); border: 1px solid var(--border); }
+td { padding: 9px 14px; border: 1px solid var(--border); color: var(--ink2); vertical-align: top; }
+tr:hover td { background: var(--accent-light); }
+
+/* Tags */
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 100px;
+  font-size: 11px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; margin: 2px;
+}
+.tag.teal { background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent-border); }
+.tag.blue { background: var(--blue-light); color: var(--blue); border: 1px solid #bfdbfe; }
+.tag.green { background: var(--green-light); color: var(--green); border: 1px solid #bbf7d0; }
+.tag.orange { background: var(--orange-light); color: var(--orange); border: 1px solid #fed7aa; }
+.tag.red { background: var(--red-light); color: var(--red); border: 1px solid #fecaca; }
+.tag.purple { background: var(--purple-light); color: var(--purple); border: 1px solid #ddd6fe; }
+
+/* Architecture diagram */
+.arch {
+  background: var(--code-bg); border-radius: 10px;
+  padding: 28px 32px; margin: 20px 0;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.arch-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.arch-box {
+  padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  text-align: center; min-width: 120px;
+}
+.arch-box.lead { background: var(--accent); color: white; }
+.arch-box.mate { background: #1e3a5f; color: #89b4fa; border: 1px solid #2a4a7a; }
+.arch-box.task { background: #2d1b4e; color: #cba6f7; border: 1px solid #4a2d7a; }
+.arch-box.msg { background: #1e3d2f; color: #a6e3a1; border: 1px solid #2d5a3d; }
+.arch-label { font-size: 10px; color: #585b70; text-align: center; margin-top: 4px; }
+.arch-arrow { color: #585b70; font-size: 20px; }
+.arch-sep { border-top: 1px dashed #313244; margin: 16px 0; }
+
+/* Comparison table highlight */
+.vs-table th:first-child { background: #f1f5f9; }
+.vs-table td.sub { background: #eff6ff; color: #1d4ed8; }
+.vs-table td.team { background: #f0fdfa; color: #065f46; font-weight: 600; }
+
+/* Scenario */
+.scenario { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 20px 0; }
+.scenario-header {
+  background: var(--ink); color: white; padding: 14px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.scenario-icon { font-size: 20px; }
+.scenario-title { font-size: 15px; font-weight: 600; }
+.scenario-sub { font-size: 12px; opacity: 0.6; margin-top: 2px; }
+.scenario-body { padding: 20px; }
+
+/* Shortcut card */
+.shortcut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+.shortcut-card {
+  background: var(--paper); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px;
+}
+.shortcut-key {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 700;
+  background: var(--bg); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px;
+}
+.shortcut-desc { font-size: 13px; color: var(--ink2); }
+
+/* Lifecycle */
+.lifecycle {
+  display: flex; gap: 0; margin: 20px 0; overflow-x: auto; padding-bottom: 4px;
+}
+.lc-step {
+  flex-shrink: 0;
+  background: var(--paper); border: 1px solid var(--border); border-right: none;
+  padding: 12px 18px; font-size: 13px; font-weight: 600;
+  position: relative; min-width: 110px; text-align: center;
+}
+.lc-step:first-child { border-radius: 8px 0 0 8px; }
+.lc-step:last-child { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+.lc-step.active { background: var(--accent); color: white; border-color: var(--accent); }
+.lc-num { font-family: 'IBM Plex Mono', monospace; font-size: 10px; opacity: 0.6; display: block; margin-bottom: 2px; }
+
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; }
+  .toc { display: none; }
+  .main { padding: 24px; }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- TOC -->
+<nav class="toc">
+  <div class="toc-title">Mục lục</div>
+  <a class="toc-item" href="#vs">Teams vs Subagents</a>
+  <a class="toc-item" href="#enable">Bật tính năng</a>
+  <a class="toc-item" href="#architecture">Kiến trúc bên trong</a>
+  <a class="toc-item" href="#lifecycle">Vòng đời một Team</a>
+  <div class="toc-sep"></div>
+  <a class="toc-item" href="#ex1">Ví dụ 1: Debug song song</a>
+  <a class="toc-item" href="#ex2">Ví dụ 2: Review đa chiều</a>
+  <a class="toc-item" href="#ex3">Ví dụ 3: Full-stack feature</a>
+  <div class="toc-sep"></div>
+  <a class="toc-item" href="#controls">Điều khiển Team</a>
+  <a class="toc-item toc-sub" href="#display">Display modes</a>
+  <a class="toc-item toc-sub" href="#plan-approval">Plan approval</a>
+  <a class="toc-item toc-sub" href="#delegate">Delegate mode</a>
+  <a class="toc-item toc-sub" href="#shutdown">Shutdown</a>
+  <a class="toc-item" href="#pitfalls">Pitfalls thực tế</a>
+  <a class="toc-item" href="#decide">Khi nào dùng gì?</a>
+</nav>
+
+<!-- Main -->
+<main class="main">
+
+<div class="doc-header">
+  <div class="doc-tag">🧪 Research Preview · Agent Teams</div>
+  <h1>Claude Code<br>Agent Teams</h1>
+  <p>Upgrade từ Subagents lên Agent Teams — khi bạn cần nhiều AI làm việc <em>với nhau</em>, không chỉ làm việc song song.</p>
+  <div class="upgrade-note">
+    ⚠️ Tính năng experimental, bật thủ công — xem hướng dẫn setup bên dưới
+  </div>
+</div>
+
+<!-- VS SUBAGENTS -->
+<section class="section" id="vs">
+  <h2><span class="h2-num">01</span> Agent Teams vs Subagents — Khác nhau ở đâu?</h2>
+
+  <p>Đây là câu hỏi quan trọng nhất. Hiểu sai điều này sẽ khiến bạn dùng sai tool.</p>
+
+  <table class="vs-table">
+    <tr>
+      <th></th>
+      <th>Subagents</th>
+      <th>Agent Teams</th>
+    </tr>
+    <tr>
+      <td><strong>Context</strong></td>
+      <td class="sub">Context riêng, trả kết quả về main</td>
+      <td class="team">Context riêng, hoàn toàn độc lập</td>
+    </tr>
+    <tr>
+      <td><strong>Giao tiếp</strong></td>
+      <td class="sub">Chỉ report về main agent</td>
+      <td class="team">Teammates nhắn tin trực tiếp cho nhau</td>
+    </tr>
+    <tr>
+      <td><strong>Coordination</strong></td>
+      <td class="sub">Main agent quản lý tất cả</td>
+      <td class="team">Shared task list, tự phân việc</td>
+    </tr>
+    <tr>
+      <td><strong>Token cost</strong></td>
+      <td class="sub">Thấp hơn</td>
+      <td class="team">Cao hơn đáng kể</td>
+    </tr>
+    <tr>
+      <td><strong>Dùng khi</strong></td>
+      <td class="sub">Task đơn, chỉ cần kết quả cuối</td>
+      <td class="team">Task phức tạp, cần thảo luận và phối hợp</td>
+    </tr>
+    <tr>
+      <td><strong>Analogy</strong></td>
+      <td class="sub">Thuê thợ chuyên, nhận hàng xong trả tiền</td>
+      <td class="team">Làm việc cùng một team cố định</td>
+    </tr>
+  </table>
+
+  <div class="note info">
+    <span class="note-icon">💡</span>
+    <div><strong>Insight cốt lõi:</strong> Subagents không thể nói chuyện với nhau — chúng chỉ báo cáo về main agent. Agent Teams thì khác: teammate A có thể nhắn cho teammate B, challenge lý thuyết của nhau, chia sẻ findings — giống team người thật.</div>
+  </div>
+</section>
+
+<!-- ENABLE -->
+<section class="section" id="enable">
+  <h2><span class="h2-num">02</span> Bật Agent Teams</h2>
+
+  <p>Agent Teams là experimental và tắt theo mặc định. Cần enable thủ công.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-left"><div class="step-num">1</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Mở file settings.json của Claude Code</div>
+        <pre><code><span class="c"># macOS / Linux</span>
+~/.claude/settings.json
+
+<span class="c"># Nếu chưa có file, tạo mới:</span>
+mkdir -p ~/.claude && touch ~/.claude/settings.json</code></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-left"><div class="step-num">2</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Thêm env variable</div>
+        <pre><code>{
+  <span class="k">"env"</span>: {
+    <span class="k">"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"</span>: <span class="s">"1"</span>
+  }
+}</code></pre>
+        <div class="note warn"><span class="note-icon">⚠️</span><div>Đây là experimental — có known limitations về session resumption, task coordination, và shutdown behavior. Không dùng cho production-critical workflows chưa test kỹ.</div></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-left"><div class="step-num">3</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">(Tùy chọn) Cài tmux hoặc iTerm2 cho split panes</div>
+        <div class="step-desc">Không bắt buộc — in-process mode mặc định hoạt động ở mọi terminal. Nhưng tmux/iTerm2 cho phép thấy output tất cả teammates đồng thời.</div>
+        <pre><code><span class="c"># macOS — chọn một trong hai:</span>
+brew install tmux
+<span class="c"># hoặc download iTerm2 từ iterm2.com</span>
+
+<span class="c"># Sau đó set trong settings.json (nếu muốn):</span>
+{
+  <span class="k">"teammateMode"</span>: <span class="s">"tmux"</span>
+}</code></pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-left"><div class="step-num">4</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Kiểm tra đã bật thành công</div>
+        <pre><code><span class="c"># Khởi động Claude Code và thử:</span>
+claude
+
+<span class="c"># Trong session, hỏi Claude:</span>
+Can you create a small agent team to test if the feature is enabled?</code></pre>
+        <div class="step-desc">Nếu Claude bắt đầu nói về "spawning teammates" thay vì subagents, bạn đã bật thành công.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="section" id="architecture">
+  <h2><span class="h2-num">03</span> Kiến trúc bên trong</h2>
+
+  <p>Hiểu kiến trúc giúp bạn debug khi có lỗi và dùng đúng tính năng.</p>
+
+  <div class="arch">
+    <div class="arch-row">
+      <div>
+        <div class="arch-box lead">👑 Team Lead</div>
+        <div class="arch-label">Main session của bạn</div>
+      </div>
+      <div class="arch-arrow">↔</div>
+      <div>
+        <div class="arch-box task">📋 Task List</div>
+        <div class="arch-label">Shared, với dependency tracking</div>
+      </div>
+      <div class="arch-arrow">↔</div>
+      <div>
+        <div class="arch-box msg">📬 Mailbox</div>
+        <div class="arch-label">Inbox-based messaging</div>
+      </div>
+    </div>
+    <div class="arch-sep"></div>
+    <div class="arch-row">
+      <div>
+        <div class="arch-box mate">🤖 Teammate 1</div>
+        <div class="arch-label">Claude instance riêng biệt</div>
+      </div>
+      <div class="arch-arrow" style="color:#89b4fa">↔</div>
+      <div>
+        <div class="arch-box mate">🤖 Teammate 2</div>
+        <div class="arch-label">Claude instance riêng biệt</div>
+      </div>
+      <div class="arch-arrow" style="color:#89b4fa">↔</div>
+      <div>
+        <div class="arch-box mate">🤖 Teammate 3</div>
+        <div class="arch-label">Claude instance riêng biệt</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Dữ liệu lưu ở đâu</h3>
+  <pre><code>~/.claude/
+├── teams/
+│   └── {team-name}/
+│       ├── config.json         <span class="c"># Team metadata + danh sách members</span>
+│       └── messages/
+│           └── {session-id}/   <span class="c"># Inbox của từng teammate</span>
+└── tasks/
+    └── {team-name}/            <span class="c"># Task list với dependency tracking</span></code></pre>
+
+  <div class="note info">
+    <span class="note-icon">ℹ️</span>
+    <div>Teammates tự động load CLAUDE.md, MCP servers, và skills của project — nhưng <strong>KHÔNG</strong> kế thừa conversation history của lead. Phải tự context trong spawn prompt.</div>
+  </div>
+</section>
+
+<!-- LIFECYCLE -->
+<section class="section" id="lifecycle">
+  <h2><span class="h2-num">04</span> Vòng đời một Agent Team</h2>
+
+  <div class="lifecycle">
+    <div class="lc-step active"><span class="lc-num">01</span>Tạo Team</div>
+    <div class="lc-step active"><span class="lc-num">02</span>Tạo Tasks</div>
+    <div class="lc-step active"><span class="lc-num">03</span>Spawn Mates</div>
+    <div class="lc-step active"><span class="lc-num">04</span>Làm việc</div>
+    <div class="lc-step active"><span class="lc-num">05</span>Coordinate</div>
+    <div class="lc-step active"><span class="lc-num">06</span>Shutdown</div>
+    <div class="lc-step active"><span class="lc-num">07</span>Cleanup</div>
+  </div>
+
+  <table>
+    <tr><th>Bước</th><th>Ai làm</th><th>Cách thực hiện</th></tr>
+    <tr><td>1. Tạo Team</td><td>Lead (bạn)</td><td>Natural language — Claude tự tạo team structure</td></tr>
+    <tr><td>2. Tạo Tasks</td><td>Lead</td><td>Lead tạo task list với dependency tracking</td></tr>
+    <tr><td>3. Spawn Teammates</td><td>Lead</td><td>Lead spawn từng Claude instance riêng biệt</td></tr>
+    <tr><td>4. Làm việc</td><td>Teammates</td><td>Tự claim task, làm độc lập trong context riêng</td></tr>
+    <tr><td>5. Coordinate</td><td>Teammates + Lead</td><td>Gửi findings qua mailbox, challenge nhau</td></tr>
+    <tr><td>6. Shutdown</td><td>Lead → Teammates</td><td>Lead gửi shutdown request, teammate có thể reject</td></tr>
+    <tr><td>7. Cleanup</td><td>Lead</td><td><span class="inline-code">Clean up the team</span> — PHẢI dùng lead, không dùng teammate</td></tr>
+  </table>
+
+  <div class="note danger">
+    <span class="note-icon">🚫</span>
+    <div><strong>Luôn dùng Lead để cleanup.</strong> Teammates không nên chạy cleanup — team context của họ có thể không resolve đúng, để lại resources ở trạng thái inconsistent.</div>
+  </div>
+</section>
+
+<!-- EXAMPLE 1 -->
+<section class="section" id="ex1">
+  <h2><span class="h2-num">05</span> Ví dụ 1: Debug với competing hypotheses</h2>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <div class="scenario-icon">🔍</div>
+      <div>
+        <div class="scenario-title">Bug khó — nhiều giả thuyết cùng lúc</div>
+        <div class="scenario-sub">5 teammates, mỗi người investigate một theory khác nhau, rồi challenge nhau</div>
+      </div>
+    </div>
+    <div class="scenario-body">
+
+      <p>Đây là use case <strong>mạnh nhất</strong> của Agent Teams. Debug tuần tự bị anchoring — lần đầu tìm ra một theory, các bước sau bị bias theo nó. Nhiều investigators độc lập chạy adversarial debate sẽ tìm ra root cause nhanh hơn nhiều.</p>
+
+      <h3>Bước 1: Mô tả bug cho Lead</h3>
+      <pre><code>Users report the checkout process fails intermittently.
+Error only happens ~15% of the time, no consistent pattern in logs.
+
+Create an agent team to investigate competing hypotheses:
+1. Race condition in payment gateway callback
+2. Database connection pool exhaustion under load
+3. Session timeout during 3D Secure redirect
+4. Third-party shipping API latency spike
+5. Memory leak in cart serialization
+
+Have them investigate in parallel, then debate each other's findings.
+Update a shared findings doc with whatever consensus emerges.</code></pre>
+
+      <h3>Bước 2: Lead tạo team và spawn 5 teammates</h3>
+      <pre><code><span class="c">▶ Creating team: checkout-debug</span>
+<span class="c">▶ Creating task list...</span>
+<span class="c">  Task 1: Investigate race condition hypothesis</span>
+<span class="c">  Task 2: Investigate DB connection pool hypothesis</span>
+<span class="c">  Task 3: Investigate session timeout hypothesis</span>
+<span class="c">  Task 4: Investigate shipping API hypothesis</span>
+<span class="c">  Task 5: Synthesize findings (blocked by 1-4)</span>
+<span class="c">▶ Spawning 5 teammates...</span></code></pre>
+
+      <h3>Bước 3: Teammates hoạt động (bạn thấy trong terminal)</h3>
+      <pre><code><span class="c">[teammate-1] Scanning src/payments/ for async operations...</span>
+<span class="c">[teammate-2] Checking db/pool.ts and connection config...</span>
+<span class="c">[teammate-3] Tracing session lifecycle in auth middleware...</span>
+<span class="c">[teammate-4] Fetching shipping API logs from last 7 days...</span>
+
+<span class="c"># Teammates gửi findings cho nhau qua mailbox:</span>
+<span class="c">[teammate-1 → teammate-2]: Found uncaught Promise in payment callback.</span>
+<span class="c">  Could correlate with your connection drops? Check timing.</span>
+<span class="c">[teammate-2 → teammate-1]: Connection drops happen AFTER payment callback,</span>
+<span class="c">  not during. Your race condition theory is more likely.</span></code></pre>
+
+      <h3>Bước 4: Tương tác trực tiếp với teammate</h3>
+      <pre><code><span class="c"># Bạn có thể nhắn thẳng cho teammate-1 (không qua lead):</span>
+[Select teammate-1 bằng Shift+Up/Down]
+Can you also check if the issue appears in staging environment logs?</code></pre>
+
+      <h3>Bước 5: Nhận kết quả tổng hợp</h3>
+      <pre><code><span class="c">━━━ Consensus from checkout-debug team ━━━</span>
+
+Root cause: Race condition in payment callback (Confidence: HIGH)
+
+Evidence:
+- teammate-1: Uncaught Promise at payments/gateway.ts:127
+- teammate-2: DB drops correlate temporally with callback (not causal)
+- teammate-3: Session valid throughout — ruled out
+- teammate-4: Shipping API latency normal — ruled out
+
+Fix: Add proper await + error boundary at gateway.ts:127
+Test: 500 concurrent checkout simulations to verify</code></pre>
+
+      <h3>Bước 6: Shutdown và cleanup</h3>
+      <pre><code><span class="c"># Nói với Lead:</span>
+The race condition is confirmed fixed. Please shut down all teammates
+and clean up the checkout-debug team.</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- EXAMPLE 2 -->
+<section class="section" id="ex2">
+  <h2><span class="h2-num">06</span> Ví dụ 2: Code Review đa chiều</h2>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <div class="scenario-icon">🔬</div>
+      <div>
+        <div class="scenario-title">Review PR từ 3 góc độ độc lập</div>
+        <div class="scenario-sub">Security + Performance + Architecture — mỗi người nhìn từ lens khác nhau</div>
+      </div>
+    </div>
+    <div class="scenario-body">
+
+      <p>Single reviewer thường bị gravitating về một loại issue. Chia review criteria cho 3 teammates độc lập, mỗi người tập trung hoàn toàn vào domain của mình.</p>
+
+      <h3>Spawn prompt</h3>
+      <pre><code>Create a code review team for PR #247 (auth module refactor).
+
+Spawn 3 reviewer teammates:
+
+1. security-reviewer: Review src/auth/ for OWASP Top 10 vulnerabilities.
+   Focus: token handling, session management, input validation, secrets exposure.
+   Rate issues: CRITICAL / HIGH / MEDIUM / LOW.
+
+2. performance-reviewer: Review for performance issues.
+   Focus: N+1 queries, unnecessary re-renders, memory leaks, slow algorithms.
+   Include estimated impact where possible.
+
+3. architecture-reviewer: Review design decisions.
+   Focus: SOLID principles, coupling, cohesion, testability, future extensibility.
+
+Have them share findings with each other. If they disagree on priority,
+debate and reach consensus before reporting to me.</code></pre>
+
+      <div class="note tip">
+        <span class="note-icon">💡</span>
+        <div>Điểm khác biệt so với Subagents: <strong>reviewers debate với nhau</strong>. Nếu security-reviewer tìm ra một issue nhưng architecture-reviewer cho rằng fix sẽ break design pattern, họ sẽ thảo luận trực tiếp trước khi báo về cho bạn.</div>
+      </div>
+
+      <h3>Bật Plan Approval cho review nghiêm túc</h3>
+      <pre><code><span class="c"># Nếu muốn approve plan của từng reviewer trước khi họ bắt đầu:</span>
+Spawn 3 reviewer teammates. Require plan approval before each starts.
+
+<span class="c"># Lead sẽ hỏi bạn xác nhận plan của từng teammate:</span>
+<span class="c"># "security-reviewer plans to: read all files in src/auth/,</span>
+<span class="c">#  run grep for hardcoded secrets, check JWT implementation..."</span>
+<span class="c"># Approve? (y/n)</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- EXAMPLE 3 -->
+<section class="section" id="ex3">
+  <h2><span class="h2-num">07</span> Ví dụ 3: Full-stack Feature — Phân chia theo layer</h2>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <div class="scenario-icon">🏗️</div>
+      <div>
+        <div class="scenario-title">Implement feature spanning frontend + backend + tests</div>
+        <div class="scenario-sub">3 teammates mỗi người own một layer, không conflict nhau</div>
+      </div>
+    </div>
+    <div class="scenario-body">
+
+      <h3>Nguyên tắc phân chia task cho Agent Teams</h3>
+      <p>Quan trọng nhất: <strong>file ownership phải rõ ràng</strong>. Hai teammates edit cùng file sẽ gây overwrites và conflicts.</p>
+
+      <table>
+        <tr><th>Teammate</th><th>Files sở hữu</th><th>Không được đụng vào</th></tr>
+        <tr><td>frontend-dev</td><td>src/components/**, src/pages/**</td><td>src/api/**, src/db/**</td></tr>
+        <tr><td>backend-dev</td><td>src/api/**, src/services/**</td><td>src/components/**, src/pages/**</td></tr>
+        <tr><td>test-engineer</td><td>tests/**</td><td>src/** (chỉ đọc)</td></tr>
+      </table>
+
+      <h3>Spawn prompt với file ownership rõ ràng</h3>
+      <pre><code>Implement the "user notification preferences" feature.
+Spec is at docs/specs/notification-prefs.md.
+
+Create a team with 3 teammates, each owning a distinct layer:
+
+1. frontend-dev:
+   - Owns: src/components/NotificationPrefs/, src/pages/settings/
+   - Build the UI with form controls and validation
+   - Wait for backend-dev's API contract before implementing fetch calls
+
+2. backend-dev:
+   - Owns: src/api/notifications/, src/services/notifications/
+   - Implement REST endpoints per the spec
+   - Write API contract doc at docs/api/notification-prefs.md
+
+3. test-engineer:
+   - Owns: tests/unit/notifications/, tests/e2e/settings/
+   - Read-only access to src/
+   - Write tests after frontend and backend signal completion
+
+Dependencies: test-engineer is blocked by frontend-dev AND backend-dev.
+frontend-dev is blocked by backend-dev's API contract doc.</code></pre>
+
+      <h3>Task dependency tracking tự động</h3>
+      <pre><code><span class="c"># Claude tạo task list với auto-unblocking:</span>
+<span class="c">Task 1: Write API contract  [owner: backend-dev]   → IN PROGRESS</span>
+<span class="c">Task 2: Implement UI        [owner: frontend-dev]  → BLOCKED by Task 1</span>
+<span class="c">Task 3: Implement API       [owner: backend-dev]   → IN PROGRESS</span>
+<span class="c">Task 4: Write tests         [owner: test-engineer] → BLOCKED by Task 2, 3</span>
+
+<span class="c"># Khi Task 1 hoàn thành → Task 2 tự động UNBLOCKED</span>
+<span class="c"># frontend-dev self-claim Task 2 ngay lập tức</span></code></pre>
+
+      <div class="note warn">
+        <span class="note-icon">⚠️</span>
+        <div><strong>Quy tắc file ownership:</strong> Nếu 2 teammates edit cùng file → conflict và overwrites. Luôn phân chia tasks sao cho mỗi file chỉ có một teammate owner tại một thời điểm.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTROLS -->
+<section class="section" id="controls">
+  <h2><span class="h2-num">08</span> Điều khiển Agent Team</h2>
+
+  <h3 id="display">Display modes</h3>
+  <table>
+    <tr><th>Mode</th><th>Cách bật</th><th>Ưu điểm</th><th>Hạn chế</th></tr>
+    <tr>
+      <td><span class="tag teal">in-process</span> (mặc định)</td>
+      <td>Mặc định, không cần config</td>
+      <td>Hoạt động ở mọi terminal</td>
+      <td>Phải Shift+Up/Down để chuyển giữa teammates</td>
+    </tr>
+    <tr>
+      <td><span class="tag blue">tmux</span></td>
+      <td><span class="inline-code">"teammateMode": "tmux"</span></td>
+      <td>Thấy tất cả output đồng thời, click để interact</td>
+      <td>Cần cài tmux, không hỗ trợ VS Code terminal</td>
+    </tr>
+    <tr>
+      <td><span class="tag purple">iTerm2</span></td>
+      <td><span class="inline-code">"teammateMode": "iterm2"</span></td>
+      <td>Split panes đẹp nhất trên macOS</td>
+      <td>Chỉ macOS + iTerm2</td>
+    </tr>
+  </table>
+
+  <h3>Keyboard shortcuts (in-process mode)</h3>
+  <div class="shortcut-grid">
+    <div class="shortcut-card">
+      <div class="shortcut-key">Shift + ↑ / ↓</div>
+      <div class="shortcut-desc">Chọn teammate để tương tác</div>
+    </div>
+    <div class="shortcut-card">
+      <div class="shortcut-key">Enter</div>
+      <div class="shortcut-desc">Xem session của teammate đang chọn</div>
+    </div>
+    <div class="shortcut-card">
+      <div class="shortcut-key">Escape</div>
+      <div class="shortcut-desc">Interrupt turn của teammate</div>
+    </div>
+    <div class="shortcut-card">
+      <div class="shortcut-key">Ctrl + T</div>
+      <div class="shortcut-desc">Toggle task list overlay</div>
+    </div>
+    <div class="shortcut-card">
+      <div class="shortcut-key">Shift + Tab</div>
+      <div class="shortcut-desc">Bật Delegate mode (lead chỉ coordinate)</div>
+    </div>
+  </div>
+
+  <h3 id="plan-approval">Plan Approval — Kiểm soát trước khi thực thi</h3>
+  <p>Dùng khi task có rủi ro cao — teammate phải submit plan, bạn approve/reject trước khi họ bắt tay vào làm.</p>
+  <pre><code><span class="c"># Require approval trong spawn prompt:</span>
+Spawn a refactoring teammate for the auth module.
+Require plan approval before they make any changes.
+
+<span class="c"># Chỉ định criteria approve:</span>
+Only approve plans that:
+- Include test coverage for every changed function
+- Do NOT modify the database schema
+- Estimate less than 5 files changed</code></pre>
+
+  <h3 id="delegate">Delegate Mode — Lead chỉ coordinate, không code</h3>
+  <p>Nhấn <span class="inline-code">Shift+Tab</span> để restrict lead vào coordination-only mode. Ngăn chặn vấn đề phổ biến: lead bị distracted và tự implement thay vì đợi teammates.</p>
+  <pre><code><span class="c"># Hoặc nhắc Lead trong prompt:</span>
+Create the team and delegate all implementation to teammates.
+Your job is only to spawn, coordinate, and synthesize.
+Do NOT write any code yourself. Wait for teammates.</code></pre>
+
+  <h3 id="shutdown">Shutdown đúng cách</h3>
+  <pre><code><span class="c"># Bước 1: Yêu cầu Lead shutdown từng teammate</span>
+Please shut down all teammates gracefully.
+
+<span class="c"># Teammates có thể reject nếu đang ở giữa task quan trọng:</span>
+<span class="c">[teammate-2]: Cannot shut down — currently writing critical test.</span>
+<span class="c">  Will complete in ~2 minutes. Please wait.</span>
+
+<span class="c"># Bước 2: Sau khi tất cả shutdown xong, cleanup team</span>
+Clean up the team.
+
+<span class="c"># Lead tự kiểm tra active teammates trước khi cleanup</span>
+<span class="c"># Nếu còn teammate active → cleanup sẽ fail với error</span></code></pre>
+</section>
+
+<!-- PITFALLS -->
+<section class="section" id="pitfalls">
+  <h2><span class="h2-num">09</span> Pitfalls thực tế & cách xử lý</h2>
+
+  <table>
+    <tr><th>Vấn đề</th><th>Biểu hiện</th><th>Fix</th></tr>
+    <tr>
+      <td>Lead tự implement thay vì delegate</td>
+      <td>Lead bắt đầu viết code thay vì chờ teammates</td>
+      <td>Bật Delegate mode (<span class="inline-code">Shift+Tab</span>) hoặc nhắc rõ trong prompt</td>
+    </tr>
+    <tr>
+      <td>Task status lag</td>
+      <td>Task xong nhưng vẫn hiện "in progress", blocking dependent tasks</td>
+      <td>Hỏi Lead kiểm tra task thực sự done chưa, update thủ công nếu cần</td>
+    </tr>
+    <tr>
+      <td>Session không resume được</td>
+      <td>Sau /resume, Lead cố nhắn tin cho teammate không còn tồn tại</td>
+      <td>Spawn fresh teammates sau khi resume</td>
+    </tr>
+    <tr>
+      <td>File conflicts</td>
+      <td>Hai teammates edit cùng file → overwrites</td>
+      <td>Phân chia file ownership rõ ràng ngay từ spawn prompt</td>
+    </tr>
+    <tr>
+      <td>Token cost vượt kỳ vọng</td>
+      <td>Hóa đơn cao hơn nhiều so với dùng single agent</td>
+      <td>Dùng Agent Teams chỉ khi task thực sự cần parallel specialists</td>
+    </tr>
+  </table>
+
+  <div class="note warn">
+    <span class="note-icon">⚠️</span>
+    <div><strong>Không có nested teams.</strong> Teammates không thể spawn thêm teammates. Một lead quản lý một team tại một thời điểm. Thiết kế này là có chủ ý — ngăn infinite recursion và mất kiểm soát token cost.</div>
+  </div>
+</section>
+
+<!-- DECISION GUIDE -->
+<section class="section" id="decide">
+  <h2><span class="h2-num">10</span> Khi nào dùng gì?</h2>
+
+  <p>Đây là câu hỏi thực tế quan trọng nhất. Đừng dùng Agent Teams chỉ vì nó "nghe có vẻ powerful hơn".</p>
+
+  <table>
+    <tr><th>Tình huống</th><th>Dùng gì</th><th>Lý do</th></tr>
+    <tr>
+      <td>Review code sau khi viết xong</td>
+      <td><span class="tag blue">Subagent</span></td>
+      <td>Task đơn, chỉ cần kết quả cuối</td>
+    </tr>
+    <tr>
+      <td>Fix một bug cụ thể</td>
+      <td><span class="tag blue">Single session</span></td>
+      <td>Sequential, không cần parallel</td>
+    </tr>
+    <tr>
+      <td>Debug bug intermittent khó tái hiện</td>
+      <td><span class="tag teal">Agent Teams</span></td>
+      <td>Multiple hypotheses song song, cần debate</td>
+    </tr>
+    <tr>
+      <td>Review PR từ nhiều góc độ (security + perf + arch)</td>
+      <td><span class="tag teal">Agent Teams</span></td>
+      <td>Reviewers cần share và challenge findings của nhau</td>
+    </tr>
+    <tr>
+      <td>Chạy tests, lint, format</td>
+      <td><span class="tag blue">Subagent / Hook</span></td>
+      <td>Routine task, single-tool, không cần coordination</td>
+    </tr>
+    <tr>
+      <td>Feature spanning frontend + backend + tests</td>
+      <td><span class="tag teal">Agent Teams</span></td>
+      <td>Clear file ownership, genuine parallel value</td>
+    </tr>
+    <tr>
+      <td>Research 3 approaches cho một architectural decision</td>
+      <td><span class="tag teal">Agent Teams</span></td>
+      <td>Teammates khám phá độc lập rồi debate</td>
+    </tr>
+    <tr>
+      <td>Viết documentation</td>
+      <td><span class="tag blue">Subagent</span></td>
+      <td>Sequential, không cần inter-agent communication</td>
+    </tr>
+  </table>
+
+  <div class="note tip">
+    <span class="note-icon">🎯</span>
+    <div><strong>Rule of thumb từ Addy Osmani:</strong> "Let the problem guide the tooling, not the other way around. If a single agent in a focused session gets you there faster, use that. Agent Teams add coordination overhead and use significantly more tokens — they pay off only on larger, parallelizable work where teammates can operate independently."</div>
+  </div>
+
+  <h3>Pyramid of tools — dùng từ dưới lên</h3>
+  <pre><code>                    ┌─────────────────┐
+                    │   Agent Teams   │  ← Parallel, cần debate
+                    │  (experimental) │    Cross-layer coordination
+                    └────────┬────────┘
+               ┌─────────────┴─────────────┐
+               │         Subagents          │  ← Isolate context
+               │   (stable, recommended)    │    Parallel tasks, no comms
+               └─────────────┬─────────────┘
+          ┌───────────────────┴───────────────────┐
+          │          Single Session                │  ← 90% of daily work
+          │   (cheapest, fastest, most reliable)   │
+          └───────────────────────────────────────┘</code></pre>
+
+  <p>Bắt đầu từ single session. Upgrade lên Subagents khi cần isolate context. Upgrade lên Agent Teams chỉ khi teammates thực sự cần communicate với nhau.</p>
+</section>
+
+</main>
+</div>
+
+<script>
+const sections = document.querySelectorAll('.section');
+const tocItems = document.querySelectorAll('.toc-item');
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      tocItems.forEach(t => t.classList.remove('active'));
+      const a = document.querySelector(`.toc-item[href="#${e.target.id}"]`);
+      if (a) a.classList.add('active');
+    }
+  });
+}, { threshold: 0.35 });
+sections.forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>
