@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka At-Least-Once — Finance Project</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg2:#f5f4f0;--bg3:#eeecea;
+  --bgi:#e6f1fb;--bgs:#eaf3de;--bgd:#fcebeb;--bgw:#faeeda;--bgp:#eeedfe;
+  --tx:#2c2c2a;--tx2:#5f5e5a;--tx3:#888780;
+  --txi:#185fa5;--txs:#3b6d11;--txd:#a32d2d;--txw:#854f0b;--txp:#3c3489;
+  --bd:rgba(44,44,42,.15);--bd2:rgba(44,44,42,.28);
+  --bdi:#b5d4f4;--bds:#c0dd97;--bdd:#f7c1c1;--bdw:#fac775;--bdp:#afa9ec;
+  --mono:ui-monospace,'Cascadia Code',monospace;
+  --sans:system-ui,-apple-system,sans-serif;
+  --r:8px;--rl:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e1e1c;--bg2:#2c2c2a;--bg3:#383836;
+  --bgi:#042c53;--bgs:#173404;--bgd:#501313;--bgw:#412402;--bgp:#26215c;
+  --tx:#e8e6de;--tx2:#b4b2a9;--tx3:#888780;
+  --txi:#85b7eb;--txs:#97c459;--txd:#f09595;--txw:#ef9f27;--txp:#cecbf6;
+  --bd:rgba(232,230,222,.15);--bd2:rgba(232,230,222,.28);
+  --bdi:#0c447c;--bds:#27500a;--bdd:#791f1f;--bdw:#633806;--bdp:#534ab7;
+}}
+body{font-family:var(--sans);background:var(--bg);color:var(--tx);font-size:14px;line-height:1.6}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.sidebar{border-right:0.5px solid var(--bd);padding:18px 0;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bg)}
+.brand{padding:0 16px 14px;border-bottom:0.5px solid var(--bd);margin-bottom:10px}
+.brand-t{font-size:12.5px;font-weight:500;color:var(--tx)}
+.brand-s{font-size:11px;color:var(--tx3);margin-top:2px}
+.pg{margin-bottom:2px}
+.pl{font-size:10px;font-weight:500;color:var(--tx3);letter-spacing:.07em;text-transform:uppercase;padding:6px 16px 3px}
+.ni{display:flex;align-items:center;gap:7px;padding:5px 16px;cursor:pointer;font-size:12px;color:var(--tx2);border-left:2px solid transparent;transition:all .12s;user-select:none}
+.ni:hover{background:var(--bg2);color:var(--tx)}
+.ni.active{color:var(--txi);border-left-color:var(--txi);background:var(--bgi);font-weight:500}
+.ni.done{color:var(--tx3)}
+.nd{width:5px;height:5px;border-radius:50%;background:var(--bd2);flex-shrink:0}
+.ni.active .nd{background:var(--txi)}
+.ni.done .nd{background:var(--txs)}
+.main{padding:26px 34px 48px;overflow-y:auto;max-width:860px}
+.pb{height:2px;background:var(--bd);border-radius:2px;margin-bottom:22px}
+.pf{height:100%;background:var(--txi);border-radius:2px;transition:width .25s}
+.panel{display:none}.panel.active{display:block}
+.pp{font-size:10px;font-weight:500;color:var(--tx3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+.pt{font-size:19px;font-weight:500;color:var(--tx);margin-bottom:7px;line-height:1.35}
+.pd{font-size:13px;color:var(--tx2);line-height:1.75;margin-bottom:18px;border-bottom:0.5px solid var(--bd);padding-bottom:16px}
+pre{font-family:var(--mono);font-size:11.5px;line-height:1.8;background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--r);padding:13px 15px;overflow-x:auto;margin:9px 0;tab-size:4}
+code{font-family:var(--mono);font-size:11px;background:var(--bg2);padding:1px 5px;border-radius:3px}
+.kw{color:var(--txi);font-weight:500}.cm{color:var(--tx3)}.st{color:var(--txs)}.nm{color:var(--txw)}.er{color:var(--txd);font-weight:500}.an{color:var(--txp)}
+.co{border-radius:var(--r);padding:10px 13px;margin:9px 0;font-size:12.5px;line-height:1.65;border-left:3px solid}
+.ci{background:var(--bgi);border-color:var(--txi);color:var(--txi)}
+.cs{background:var(--bgs);border-color:var(--txs);color:var(--txs)}
+.cd{background:var(--bgd);border-color:var(--txd);color:var(--txd)}
+.cw{background:var(--bgw);border-color:var(--txw);color:var(--txw)}
+.cp{background:var(--bgp);border-color:var(--txp);color:var(--txp)}
+.co strong{font-weight:500}
+.sc{font-size:13px;font-weight:500;color:var(--tx);margin:18px 0 7px}
+.tb{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+.tb th{text-align:left;font-size:10px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px;border-bottom:0.5px solid var(--bd)}
+.tb td{padding:6px 9px;border-bottom:0.5px solid var(--bd);vertical-align:top;line-height:1.5;color:var(--tx2)}
+.tb td:first-child{font-family:var(--mono);font-size:10.5px;color:var(--txi);white-space:nowrap}
+.tb td:nth-child(2){color:var(--txw);font-family:var(--mono);font-size:10.5px}
+.tb tr:last-child td{border-bottom:none}
+.steps{display:flex;flex-direction:column;gap:5px;margin:9px 0}
+.step{display:flex;gap:9px;padding:8px 11px;border-radius:var(--r);border:0.5px solid var(--bd)}
+.sn{width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0;margin-top:1px;background:var(--bg2);border:0.5px solid var(--bd2);color:var(--tx2)}
+.sb{flex:1}.st2{font-size:12.5px;font-weight:500;color:var(--tx);margin-bottom:1px}.sd{font-size:11.5px;color:var(--tx2)}
+.step.ok .sn{background:var(--bgs);border-color:var(--bds);color:var(--txs)}
+.step.wa .sn{background:var(--bgw);border-color:var(--bdw);color:var(--txw)}
+.step.ba .sn{background:var(--bgd);border-color:var(--bdd);color:var(--txd)}
+.step.pu .sn{background:var(--bgp);border-color:var(--bdp);color:var(--txp)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin:11px 0}
+.gc{border:0.5px solid var(--bd);border-radius:var(--r);padding:11px 13px}
+.gct{font-size:12px;font-weight:500;color:var(--tx);margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.bg{display:inline-block;font-size:10px;padding:2px 6px;border-radius:3px}
+.bok{background:var(--bgs);color:var(--txs)}.bwa{background:var(--bgw);color:var(--txw)}.bba{background:var(--bgd);color:var(--txd)}
+.chk{list-style:none;display:flex;flex-direction:column;gap:3px;margin:7px 0}
+.chk li{display:flex;gap:7px;font-size:12px;color:var(--tx2);padding:2px 0;align-items:flex-start}
+.chk li::before{content:"";width:12px;height:12px;border-radius:3px;border:0.5px solid var(--bds);background:var(--bgs);flex-shrink:0;margin-top:3px}
+.chk li.w::before{border-color:var(--bdw);background:var(--bgw)}
+.chk li.d::before{border-color:var(--bdd);background:var(--bgd)}
+.dg{border:0.5px solid var(--bd);border-radius:var(--rl);overflow:hidden;margin:11px 0}
+.dgl{font-size:10px;color:var(--tx3);padding:5px 11px;background:var(--bg2);border-bottom:0.5px solid var(--bd)}
+svg{display:block;width:100%}
+.svgth{font-family:var(--sans);font-size:13px;font-weight:500;fill:var(--tx)}
+.svgts{font-family:var(--sans);font-size:11px;fill:var(--tx2)}
+.nf{display:flex;align-items:center;gap:7px;margin-top:26px;padding-top:16px;border-top:0.5px solid var(--bd)}
+button{font-family:var(--sans);font-size:12.5px;padding:6px 15px;border-radius:var(--r);border:0.5px solid var(--bd2);background:transparent;color:var(--tx);cursor:pointer;transition:background .12s}
+button:hover{background:var(--bg2)}
+button:disabled{opacity:.3;cursor:not-allowed}
+.bp{background:var(--bgi);color:var(--txi);border-color:var(--bdi)}
+.bp:hover{opacity:.88;background:var(--bgi)}
+.nc{margin-left:auto;font-size:11px;color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="sidebar">
+  <div class="brand"><div class="brand-t">At-Least-Once — Finance</div><div class="brand-s">High-requirement project</div></div>
+  <div class="pg"><div class="pl">Phase 1 — Tại sao ALO?</div>
+    <div class="ni active" onclick="goTo(0)" id="nav-0"><span class="nd"></span>ALO vs EOS cho finance</div>
+    <div class="ni" onclick="goTo(1)" id="nav-1"><span class="nd"></span>Idempotency là nền tảng</div>
+  </div>
+  <div class="pg"><div class="pl">Phase 2 — Architecture</div>
+    <div class="ni" onclick="goTo(2)" id="nav-2"><span class="nd"></span>System overview</div>
+    <div class="ni" onclick="goTo(3)" id="nav-3"><span class="nd"></span>Topic design</div>
+    <div class="ni" onclick="goTo(4)" id="nav-4"><span class="nd"></span>Idempotency key schema</div>
+  </div>
+  <div class="pg"><div class="pl">Phase 3 — Producer</div>
+    <div class="ni" onclick="goTo(5)" id="nav-5"><span class="nd"></span>Producer config (acks=all)</div>
+    <div class="ni" onclick="goTo(6)" id="nav-6"><span class="nd"></span>Outbox Pattern</div>
+    <div class="ni" onclick="goTo(7)" id="nav-7"><span class="nd"></span>Retry + backoff</div>
+  </div>
+  <div class="pg"><div class="pl">Phase 4 — Consumer + Dedup</div>
+    <div class="ni" onclick="goTo(8)" id="nav-8"><span class="nd"></span>Consumer config</div>
+    <div class="ni" onclick="goTo(9)" id="nav-9"><span class="nd"></span>Dedup — DB check</div>
+    <div class="ni" onclick="goTo(10)" id="nav-10"><span class="nd"></span>Dedup — Redis cache</div>
+    <div class="ni" onclick="goTo(11)" id="nav-11"><span class="nd"></span>Idempotent DB write</div>
+    <div class="ni" onclick="goTo(12)" id="nav-12"><span class="nd"></span>Offset commit sau xử lý</div>
+  </div>
+  <div class="pg"><div class="pl">Phase 5 — Finance specifics</div>
+    <div class="ni" onclick="goTo(13)" id="nav-13"><span class="nd"></span>Ledger double-entry</div>
+    <div class="ni" onclick="goTo(14)" id="nav-14"><span class="nd"></span>Saga + compensation</div>
+    <div class="ni" onclick="goTo(15)" id="nav-15"><span class="nd"></span>Audit trail</div>
+    <div class="ni" onclick="goTo(16)" id="nav-16"><span class="nd"></span>Dead Letter Queue</div>
+  </div>
+  <div class="pg"><div class="pl">Phase 6 — Production</div>
+    <div class="ni" onclick="goTo(17)" id="nav-17"><span class="nd"></span>Monitoring &amp; alerting</div>
+    <div class="ni" onclick="goTo(18)" id="nav-18"><span class="nd"></span>Testing strategy</div>
+    <div class="ni" onclick="goTo(19)" id="nav-19"><span class="nd"></span>Full flow diagram</div>
+  </div>
+</nav>
+
+<main class="main">
+<div class="pb"><div class="pf" id="prog" style="width:5%"></div></div>
+
+<!-- 0: ALO vs EOS -->
+<div class="panel active" id="panel-0">
+  <div class="pp">Phase 1 — Tại sao At-Least-Once?</div>
+  <div class="pt">ALO vs EOS — quyết định cho finance</div>
+  <div class="pd">EOS không phải lúc nào cũng là lựa chọn đúng cho finance. ALO + Idempotent Consumer thường vừa đủ mạnh vừa đơn giản hơn, và dễ audit hơn với regulator.</div>
+  <div class="g2">
+    <div class="gc"><div class="gct">At-Least-Once <span class="bg bok">Chọn khi...</span></div>
+      <div class="steps">
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Business logic dễ idempotent</div><div class="sd">Dedup bằng event_id trong DB — simple và auditable</div></div></div>
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Cross-system transactions</div><div class="sd">Kafka → PostgreSQL → Redis cần Outbox, không cần Kafka Txn</div></div></div>
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Throughput cao hơn EOS 30–40%</div><div class="sd">Không có overhead 2PC, latency thấp hơn</div></div></div>
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Audit trail rõ ràng</div><div class="sd">Mỗi duplicate được log, trace, regulator verify được</div></div></div>
+      </div>
+    </div>
+    <div class="gc"><div class="gct">Exactly-Once <span class="bg bwa">Chọn khi...</span></div>
+      <div class="steps">
+        <div class="step wa"><div class="sn">!</div><div class="sb"><div class="st2">Pure Kafka pipeline</div><div class="sd">Không có external DB, chỉ Kafka→Kafka transform</div></div></div>
+        <div class="step wa"><div class="sn">!</div><div class="sb"><div class="st2">Dedup cực kỳ phức tạp</div><div class="sd">Business logic không thể làm idempotent bằng cách nào</div></div></div>
+        <div class="step wa"><div class="sn">!</div><div class="sb"><div class="st2">Kafka Streams đã có sẵn</div><div class="sd">EXACTLY_ONCE_V2 built-in, overhead nhỏ hơn tự implement</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="co cp"><strong>Finance context:</strong> Hệ thống thanh toán luôn có PostgreSQL/Oracle làm source of truth. ALO + idempotent write vào DB là pattern đã được ngành tài chính dùng nhiều năm — battle-tested, auditable, regulator hiểu được.</div>
+  <div class="sc">Các services trong bài này</div>
+  <div class="steps">
+    <div class="step pu"><div class="sn">1</div><div class="sb"><div class="st2">Payment Gateway</div><div class="sd">Nhận request → Outbox Pattern → publish Kafka (acks=all)</div></div></div>
+    <div class="step pu"><div class="sn">2</div><div class="sb"><div class="st2">Payment Processor</div><div class="sd">Consumer ALO + DB dedup layer → ghi ledger → publish result</div></div></div>
+    <div class="step pu"><div class="sn">3</div><div class="sb"><div class="st2">Notification Service</div><div class="sd">Consumer ALO + Redis dedup → gửi email/SMS idempotently</div></div></div>
+    <div class="step pu"><div class="sn">4</div><div class="sb"><div class="st2">Audit Service</div><div class="sd">Consumer ALO → ghi audit log (append-only, không cần dedup)</div></div></div>
+  </div>
+</div>
+
+<!-- 1: Idempotency -->
+<div class="panel" id="panel-1">
+  <div class="pp">Phase 1 — Tại sao At-Least-Once?</div>
+  <div class="pt">Idempotency — nền tảng thay thế EOS</div>
+  <div class="pd">Với ALO, duplicate là chắc chắn xảy ra. Câu hỏi không phải "làm sao tránh duplicate" mà là "làm sao xử lý duplicate an toàn". Idempotency là câu trả lời.</div>
+  <div class="sc">Ba loại idempotency trong finance</div>
+  <div class="steps">
+    <div class="step ok"><div class="sn">A</div><div class="sb"><div class="st2">Natural idempotency — SET thay vì INCREMENT</div><div class="sd">UPDATE account SET balance = 1000 WHERE id = X — chạy 100 lần kết quả như nhau</div></div></div>
+    <div class="step ok"><div class="sn">B</div><div class="sb"><div class="st2">Event-ID dedup — INSERT IF NOT EXISTS</div><div class="sd">Dùng idempotency_key unique để check "đã xử lý chưa" trước khi write. Pattern phổ biến nhất.</div></div></div>
+    <div class="step ok"><div class="sn">C</div><div class="sb"><div class="st2">Idempotency key — API level</div><div class="sd">Client gửi idempotency-key header. Server cache result và trả về cùng response nếu gọi lại.</div></div></div>
+  </div>
+  <div class="sc">Tại sao không chỉ dùng EOS để tránh duplicate?</div>
+  <pre><span class="cm">// EOS chỉ đảm bảo Kafka-to-Kafka exactly-once.</span>
+<span class="cm">// Hệ thống finance thực tế luôn có external systems:</span>
+
+producer.send(kafkaEvent);   <span class="cm">// ← EOS protect được</span>
+database.insert(ledgerRow);  <span class="cm">// ← EOS KHÔNG protect được</span>
+redis.set(cacheKey, value);  <span class="cm">// ← EOS KHÔNG protect được</span>
+emailService.send(email);    <span class="cm">// ← EOS KHÔNG protect được</span>
+
+<span class="cm">// Vẫn cần idempotency cho external systems dù có EOS.</span>
+<span class="cm">// Vậy tại sao không làm idempotency nhất quán cho tất cả,</span>
+<span class="cm">// thay vì chỉ rely vào EOS cho Kafka?</span></pre>
+  <div class="co ci"><strong>Kết luận:</strong> ALO + Idempotent Consumer = cùng safety level với EOS cho hầu hết finance use case, nhưng đơn giản hơn, throughput cao hơn, và dễ test hơn.</div>
+</div>
+
+<!-- 2: System overview -->
+<div class="panel" id="panel-2">
+  <div class="pp">Phase 2 — Architecture</div>
+  <div class="pt">System overview — payment processing</div>
+  <div class="pd">Kiến trúc tổng thể hệ thống thanh toán finance dùng ALO. Mỗi service có dedup layer riêng phù hợp với đặc thù của nó.</div>
+  <div class="dg">
+    <div class="dgl">Architecture overview — ALO + per-service idempotency</div>
+    <svg viewBox="0 0 680 420" style="padding:14px 8px">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+      <rect x="210" y="8" width="260" height="38" rx="8" fill="var(--bgi)" stroke="var(--bdi)" stroke-width="0.5"/>
+      <text class="svgth" x="340" y="31" text-anchor="middle" dominant-baseline="central" fill="var(--txi)">Payment Gateway — Outbox Pattern</text>
+      <line x1="340" y1="46" x2="340" y2="70" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="30" y="70" width="620" height="50" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgts" x="46" y="86" fill="var(--tx3)">Kafka (acks=all, min.insync.replicas=2)</text>
+      <rect x="46" y="94" width="138" height="20" rx="3" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgts" x="115" y="107" text-anchor="middle" dominant-baseline="central">payment-requests</text>
+      <rect x="198" y="94" width="118" height="20" rx="3" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgts" x="257" y="107" text-anchor="middle" dominant-baseline="central">payment-results</text>
+      <rect x="330" y="94" width="104" height="20" rx="3" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgts" x="382" y="107" text-anchor="middle" dominant-baseline="central">audit-events</text>
+      <rect x="448" y="94" width="90" height="20" rx="3" fill="var(--bg)" stroke="var(--bdd)" stroke-width="0.5"/>
+      <text class="svgts" x="493" y="107" text-anchor="middle" dominant-baseline="central">dead-letter</text>
+      <line x1="115" y1="120" x2="115" y2="150" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="257" y1="120" x2="390" y2="150" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="382" y1="120" x2="568" y2="150" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="30" y="150" width="185" height="76" rx="8" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5"/>
+      <text class="svgth" x="122" y="170" text-anchor="middle" dominant-baseline="central" fill="var(--txs)">Payment Processor</text>
+      <text class="svgts" x="122" y="188" text-anchor="middle" fill="var(--txs)">ALO + DB dedup</text>
+      <text class="svgts" x="122" y="203" text-anchor="middle" fill="var(--txs)">processed_events table</text>
+      <text class="svgts" x="122" y="218" text-anchor="middle" fill="var(--txs)">PostgreSQL ledger</text>
+      <rect x="290" y="150" width="175" height="76" rx="8" fill="var(--bgw)" stroke="var(--bdw)" stroke-width="0.5"/>
+      <text class="svgth" x="377" y="170" text-anchor="middle" dominant-baseline="central" fill="var(--txw)">Notification</text>
+      <text class="svgts" x="377" y="188" text-anchor="middle" fill="var(--txw)">ALO + Redis dedup</text>
+      <text class="svgts" x="377" y="203" text-anchor="middle" fill="var(--txw)">TTL 24h window</text>
+      <text class="svgts" x="377" y="218" text-anchor="middle" fill="var(--txw)">email / SMS</text>
+      <rect x="490" y="150" width="160" height="76" rx="8" fill="var(--bgp)" stroke="var(--bdp)" stroke-width="0.5"/>
+      <text class="svgth" x="570" y="170" text-anchor="middle" dominant-baseline="central" fill="var(--txp)">Audit Service</text>
+      <text class="svgts" x="570" y="188" text-anchor="middle" fill="var(--txp)">ALO, no dedup</text>
+      <text class="svgts" x="570" y="203" text-anchor="middle" fill="var(--txp)">append-only</text>
+      <text class="svgts" x="570" y="218" text-anchor="middle" fill="var(--txp)">immutable log</text>
+      <line x1="122" y1="226" x2="122" y2="258" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="30" y="258" width="185" height="38" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="122" y="281" text-anchor="middle" dominant-baseline="central">PostgreSQL</text>
+      <line x1="570" y1="226" x2="570" y2="258" stroke="var(--bdp)" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="490" y="258" width="160" height="38" rx="8" fill="var(--bg2)" stroke="var(--bdp)" stroke-width="0.5"/>
+      <text class="svgth" x="570" y="281" text-anchor="middle" dominant-baseline="central" fill="var(--txp)">Audit Store</text>
+      <path d="M 215 188 L 260 188 L 260 104 L 310 104" fill="none" stroke="var(--bd2)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <text class="svgts" x="230" y="176" fill="var(--tx3)">publish</text>
+      <line x1="40" y1="350" x2="68" y2="350" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a)"/>
+      <text class="svgts" x="74" y="354">ALO message flow</text>
+      <line x1="40" y1="372" x2="68" y2="372" stroke="var(--bdw)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <text class="svgts" x="74" y="376">async / outbox publish</text>
+    </svg>
+  </div>
+</div>
+
+<!-- 3: Topic design -->
+<div class="panel" id="panel-3">
+  <div class="pp">Phase 2 — Architecture</div>
+  <div class="pt">Topic design cho finance</div>
+  <div class="pd">Finance topic cần retention dài để replay khi audit hoặc recover. Partition key = accountId để đảm bảo ordering per account — debit và credit cùng tài khoản không bao giờ lộn thứ tự.</div>
+  <pre><span class="cm"># Input — 30 ngày retention (audit requirement)</span>
+kafka-topics.sh --create --topic <span class="st">payment-requests</span> \
+  --partitions <span class="nm">24</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span> \
+  --config <span class="kw">retention.ms</span>=<span class="nm">2592000000</span>
+
+<span class="cm"># Results — 30 ngày</span>
+kafka-topics.sh --create --topic <span class="st">payment-results</span> \
+  --partitions <span class="nm">24</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span> \
+  --config <span class="kw">retention.ms</span>=<span class="nm">2592000000</span>
+
+<span class="cm"># Audit — 1 năm (compliance requirement)</span>
+kafka-topics.sh --create --topic <span class="st">audit-events</span> \
+  --partitions <span class="nm">12</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span> \
+  --config <span class="kw">retention.ms</span>=<span class="nm">31536000000</span>
+
+<span class="cm"># Dead letter — 90 ngày để ops investigate</span>
+kafka-topics.sh --create --topic <span class="st">payment-dead-letter</span> \
+  --partitions <span class="nm">12</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">retention.ms</span>=<span class="nm">7776000000</span></pre>
+  <table class="tb">
+    <tr><th>Topic</th><th>Partition key</th><th>Retention</th></tr>
+    <tr><td>payment-requests</td><td>accountId</td><td>30 ngày</td></tr>
+    <tr><td>payment-results</td><td>paymentId</td><td>30 ngày</td></tr>
+    <tr><td>audit-events</td><td>entityId</td><td>1 năm</td></tr>
+    <tr><td>payment-dead-letter</td><td>original key</td><td>90 ngày</td></tr>
+  </table>
+</div>
+
+<!-- 4: Idempotency key schema -->
+<div class="panel" id="panel-4">
+  <div class="pp">Phase 2 — Architecture</div>
+  <div class="pt">Idempotency key schema — thiết kế trước khi code</div>
+  <div class="pd">Idempotency key phải được thiết kế cẩn thận. Nó là hợp đồng giữa producer và consumer để đảm bảo "cùng một operation" luôn được identify đúng, dù retry bao nhiêu lần.</div>
+  <pre><span class="kw">public record</span> PaymentEvent(
+    <span class="cm">// === Idempotency — BẮT BUỘC ===</span>
+    String eventId,          <span class="cm">// UUID v4, unique per message (khác nhau mỗi retry)</span>
+    String idempotencyKey,   <span class="cm">// Stable per operation — dùng để dedup</span>
+                             <span class="cm">// Format: "{clientRef}:{operation}:{accountId}"</span>
+                             <span class="cm">// Ví dụ: "CLIENT-789:DEBIT:ACC-456"</span>
+
+    <span class="cm">// === Business ===</span>
+    String paymentId,        <span class="cm">// Business ID — có thể có nhiều events</span>
+    String fromAccount,
+    String toAccount,
+    BigDecimal amount,
+    String currency,
+
+    <span class="cm">// === Observability ===</span>
+    String correlationId,    <span class="cm">// Trace qua nhiều services</span>
+    String causationId,      <span class="cm">// eventId của event trigger event này</span>
+    Instant occurredAt,      <span class="cm">// Business time (không phải Kafka timestamp)</span>
+    <span class="kw">int</span> version              <span class="cm">// Schema version cho backward compat</span>
+) {}
+
+<span class="cm">// Build idempotency key — stable per business operation</span>
+<span class="kw">public static</span> String buildKey(String clientRef, String op, String accountId) {
+    <span class="kw">return</span> clientRef + <span class="st">":"</span> + op + <span class="st">":"</span> + accountId;
+    <span class="cm">// Dù retry 100 lần, key này vẫn là một</span>
+    <span class="cm">// → debit account ACC-456 với ref CLIENT-789 chỉ xảy ra 1 lần</span>
+}</pre>
+  <div class="co cw"><strong>eventId vs idempotencyKey:</strong> <code>eventId</code> = unique per message, đổi mỗi retry. <code>idempotencyKey</code> = stable per operation, giống nhau qua retry. Consumer dedup dùng <code>idempotencyKey</code>. Audit log dùng <code>eventId</code> để phân biệt từng delivery.</div>
+</div>
+
+<!-- 5: Producer config -->
+<div class="panel" id="panel-5">
+  <div class="pp">Phase 3 — Producer</div>
+  <div class="pt">Producer config — acks=all, không dùng transactions</div>
+  <div class="pd">ALO producer cần <code>acks=all</code> và <code>min.insync.replicas=2</code> để không mất message. Không cần <code>transactional.id</code> — idempotency xử lý ở tầng business logic, không phải Kafka layer.</div>
+  <pre><span class="kw">Properties</span> props = <span class="nm">new</span> Properties();
+
+<span class="cm">// === Durability — bắt buộc cho finance ===</span>
+props.put(<span class="st">"acks"</span>, <span class="st">"all"</span>);
+<span class="cm">// ACK chỉ khi TẤT CẢ ISR replicas đã ghi</span>
+<span class="cm">// + min.insync.replicas=2 → survive 1 broker crash</span>
+
+props.put(<span class="st">"retries"</span>, Integer.MAX_VALUE);
+<span class="cm">// Retry vô hạn — không bao giờ để mất message</span>
+<span class="cm">// Safe: idempotent consumer handle duplicate</span>
+<span class="cm">// delivery.timeout.ms là ceiling tổng</span>
+
+props.put(<span class="st">"delivery.timeout.ms"</span>, <span class="nm">120_000</span>); <span class="cm">// 2 phút total</span>
+props.put(<span class="st">"retry.backoff.ms"</span>, <span class="nm">500</span>);
+props.put(<span class="st">"retry.backoff.max.ms"</span>, <span class="nm">30_000</span>);
+
+<span class="cm">// === Performance ===</span>
+props.put(<span class="st">"batch.size"</span>, <span class="nm">32_768</span>);  <span class="cm">// 32KB — nhỏ để latency thấp</span>
+props.put(<span class="st">"linger.ms"</span>, <span class="nm">5</span>);        <span class="cm">// 5ms — ít hơn EOS (10ms)</span>
+props.put(<span class="st">"compression.type"</span>, <span class="st">"snappy"</span>);
+
+<span class="cm">// === Không cần cho ALO ===</span>
+<span class="cm">// enable.idempotence  (không bật — tiết kiệm overhead)</span>
+<span class="cm">// transactional.id    (không dùng Kafka transactions)</span></pre>
+  <table class="tb">
+    <tr><th>Config</th><th>Value</th><th>Lý do</th></tr>
+    <tr><td>acks</td><td>all</td><td>Không mất message khi broker crash</td></tr>
+    <tr><td>retries</td><td>MAX_INT</td><td>Retry đến khi thành công</td></tr>
+    <tr><td>delivery.timeout.ms</td><td>120000</td><td>Ceiling tổng — sau đó throw exception</td></tr>
+    <tr><td>retry.backoff.ms</td><td>500</td><td>Không hammer broker ngay</td></tr>
+    <tr><td>linger.ms</td><td>5</td><td>Thấp hơn EOS — latency thấp hơn</td></tr>
+  </table>
+</div>
+
+<!-- 6: Outbox -->
+<div class="panel" id="panel-6">
+  <div class="pp">Phase 3 — Producer</div>
+  <div class="pt">Outbox Pattern — đảm bảo không mất event</div>
+  <div class="pd">Vấn đề: Service ghi DB thành công rồi crash trước khi publish Kafka → event bị mất. Outbox Pattern: ghi event vào DB <em>cùng transaction</em> với business data — atomic, không bao giờ mất.</div>
+  <div class="steps">
+    <div class="step ok"><div class="sn">1</div><div class="sb"><div class="st2">API nhận request → begin DB transaction</div><div class="sd">Một transaction duy nhất bao gồm cả business write lẫn outbox write</div></div></div>
+    <div class="step ok"><div class="sn">2</div><div class="sb"><div class="st2">Ghi business data (payments, accounts)</div><div class="sd">Business state thay đổi trong DB</div></div></div>
+    <div class="step ok"><div class="sn">3</div><div class="sb"><div class="st2">INSERT outbox entry — cùng transaction</div><div class="sd">outbox(id, topic, key, payload, status=PENDING)</div></div></div>
+    <div class="step ok"><div class="sn">4</div><div class="sb"><div class="st2">Commit DB transaction — atomic</div><div class="sd">Cả business data + outbox — cùng thành công hoặc cùng rollback</div></div></div>
+    <div class="step ok"><div class="sn">5</div><div class="sb"><div class="st2">Outbox Worker poll → Kafka publish → mark PUBLISHED</div><div class="sd">Background worker, retry nếu Kafka unavailable</div></div></div>
+  </div>
+  <pre><span class="an">@Transactional</span>  <span class="cm">// DB transaction</span>
+<span class="kw">public</span> PaymentResponse processPayment(PaymentRequest req) {
+    <span class="cm">// Business writes</span>
+    Payment payment = paymentRepo.save(<span class="nm">new</span> Payment(req));
+    accountRepo.debit(req.fromAccount(), req.amount());
+
+    <span class="cm">// Outbox write — cùng DB transaction</span>
+    outboxRepo.save(OutboxEntry.builder()
+        .topic(<span class="st">"payment-requests"</span>)
+        .partitionKey(req.fromAccount())  <span class="cm">// ordering per account</span>
+        .payload(toJson(PaymentEvent.of(payment)))
+        .idempotencyKey(payment.getIdempotencyKey())
+        .status(<span class="st">"PENDING"</span>)
+        .build());
+
+    <span class="kw">return</span> PaymentResponse.of(payment);
+    <span class="cm">// DB commit: payment + account + outbox — atomic</span>
+}</pre>
+  <pre><span class="an">@Scheduled</span>(fixedDelay = <span class="nm">100</span>)
+<span class="kw">public void</span> publishOutbox() {
+    List&lt;OutboxEntry&gt; pending = outboxRepo.findTop100Pending();
+    <span class="kw">for</span> (OutboxEntry e : pending) {
+        <span class="kw">try</span> {
+            producer.send(buildRecord(e)).get(<span class="nm">10</span>, TimeUnit.SECONDS);
+            outboxRepo.markPublished(e.getId());
+        } <span class="kw">catch</span> (Exception ex) {
+            outboxRepo.scheduleRetry(e.getId(), computeBackoff(e));
+        }
+    }
+}</pre>
+  <div class="co cs"><strong>Kết quả:</strong> Dù service crash ở bất kỳ điểm nào, outbox table vẫn có record PENDING → Worker sẽ publish khi restart. Duplicate có thể xảy ra → consumer phải dedup.</div>
+</div>
+
+<!-- 7: Retry + backoff -->
+<div class="panel" id="panel-7">
+  <div class="pp">Phase 3 — Producer</div>
+  <div class="pt">Outbox retry — exponential backoff + alerting</div>
+  <div class="pd">Outbox Worker phân biệt transient vs permanent failure. Không retry vô hạn — sau MAX_RETRIES chuyển sang FAILED và alert ops. Mọi failed message đều có trace để investigate.</div>
+  <pre><span class="kw">private static final int</span> MAX_RETRIES = <span class="nm">10</span>;
+<span class="cm">// Retry schedule (ms): 200, 400, 800, 1600, 3200...</span>
+<span class="cm">// cap tại 60_000ms sau ~8 lần retry</span>
+
+<span class="kw">private void</span> publish(OutboxEntry entry) {
+    <span class="kw">try</span> {
+        producer.send(buildRecord(entry)).get(<span class="nm">10</span>, TimeUnit.SECONDS);
+        outboxRepo.markPublished(entry.getId());
+
+    } <span class="kw">catch</span> (SerializationException e) {
+        <span class="cm">// Permanent — không retry</span>
+        outboxRepo.markFailed(entry.getId(), e.getMessage());
+        alerting.critical(<span class="st">"Outbox permanent failure: "</span> + entry.getId());
+
+    } <span class="kw">catch</span> (Exception e) {
+        <span class="cm">// Transient — exponential backoff</span>
+        <span class="kw">int</span> retries = entry.getRetryCount() + <span class="nm">1</span>;
+
+        <span class="kw">if</span> (retries >= MAX_RETRIES) {
+            outboxRepo.markFailed(entry.getId(), <span class="st">"Max retries"</span>);
+            alerting.critical(<span class="st">"Outbox max retries: "</span> + entry.getId());
+        } <span class="kw">else</span> {
+            <span class="kw">long</span> backoffMs = Math.min(
+                (<span class="kw">long</span>) Math.pow(<span class="nm">2</span>, retries) * <span class="nm">100</span>,
+                <span class="nm">60_000</span>
+            );
+            outboxRepo.scheduleRetry(
+                entry.getId(), retries,
+                Instant.now().plusMillis(backoffMs)
+            );
+        }
+    }
+}</pre>
+  <div class="co cw"><strong>Outbox table schema cần:</strong> <code>retry_count INT</code>, <code>next_retry_at TIMESTAMPTZ</code>, <code>last_error TEXT</code>, <code>status VARCHAR</code>. Index trên <code>(status, next_retry_at)</code> để poll hiệu quả không full scan.</div>
+</div>
+
+<!-- 8: Consumer config -->
+<div class="panel" id="panel-8">
+  <div class="pp">Phase 4 — Consumer + Dedup</div>
+  <div class="pt">Consumer config — ALO với manual commit</div>
+  <div class="pd"><code>enable.auto.commit=false</code> và commit <em>sau</em> xử lý là điểm cốt lõi của ALO. Commit trước = at-most-once (có thể mất). Commit sau = at-least-once (có thể duplicate, cần dedup).</div>
+  <pre><span class="kw">Properties</span> props = <span class="nm">new</span> Properties();
+
+<span class="cm">// === ALO bắt buộc ===</span>
+props.put(<span class="st">"enable.auto.commit"</span>, <span class="nm">false</span>);
+<span class="cm">// Auto-commit commit SAU poll() — nếu crash khi xử lý</span>
+<span class="cm">// offset đã committed → message bị mất → at-most-once!</span>
+
+props.put(<span class="st">"isolation.level"</span>, <span class="st">"read_uncommitted"</span>);
+<span class="cm">// OK vì Outbox Worker không dùng Kafka transactions</span>
+
+props.put(<span class="st">"auto.offset.reset"</span>, <span class="st">"earliest"</span>);
+<span class="cm">// Finance: không bao giờ bỏ qua messages</span>
+
+<span class="cm">// === Tuning cho finance ===</span>
+props.put(<span class="st">"max.poll.records"</span>, <span class="nm">100</span>);
+<span class="cm">// Nhỏ hơn thông thường — mỗi record cần DB write + dedup check</span>
+<span class="cm">// 100 records × ~5ms/record = 500ms processing time</span>
+
+props.put(<span class="st">"max.poll.interval.ms"</span>, <span class="nm">300_000</span>); <span class="cm">// 5 phút</span>
+props.put(<span class="st">"session.timeout.ms"</span>, <span class="nm">45_000</span>);
+props.put(<span class="st">"heartbeat.interval.ms"</span>, <span class="nm">3_000</span>);</pre>
+  <div class="co cd"><strong>Anti-pattern:</strong> Đừng dùng <code>commitAsync()</code> làm commit chính — không throw exception khi fail, bạn không biết offset đã committed chưa. Dùng <code>commitSync()</code> trong vòng lặp chính. <code>commitAsync()</code> chỉ trong shutdown hook.</div>
+</div>
+
+<!-- 9: Dedup DB -->
+<div class="panel" id="panel-9">
+  <div class="pp">Phase 4 — Consumer + Dedup</div>
+  <div class="pt">Dedup Layer — Database idempotency check</div>
+  <div class="pd">Layer dedup chính cho finance: check <code>idempotencyKey</code> đã xử lý chưa trước khi chạy bất kỳ business logic nào. Ghi kết quả vào <code>processed_events</code> cùng DB transaction với business write.</div>
+  <pre><span class="cm">-- processed_events table</span>
+<span class="kw">CREATE TABLE</span> processed_events (
+    idempotency_key  <span class="kw">VARCHAR</span>(<span class="nm">255</span>) <span class="kw">PRIMARY KEY</span>,
+    event_id         <span class="kw">UUID NOT NULL</span>,
+    result_payload   <span class="kw">TEXT</span>,           <span class="cm">-- trả về nếu retry</span>
+    processed_at     <span class="kw">TIMESTAMPTZ NOT NULL</span>,
+    consumer_group   <span class="kw">VARCHAR</span>(<span class="nm">100</span>) <span class="kw">NOT NULL</span>,
+    kafka_topic      <span class="kw">VARCHAR</span>(<span class="nm">255</span>) <span class="kw">NOT NULL</span>,
+    kafka_partition  <span class="kw">INT NOT NULL</span>,
+    kafka_offset     <span class="kw">BIGINT NOT NULL</span>  <span class="cm">-- để trace duplicate</span>
+);</pre>
+  <pre><span class="an">@Transactional</span>
+<span class="kw">public</span> ProcessResult processWithDedup(
+        PaymentEvent event, ConsumerRecord&lt;?,?&gt; record) {
+
+    <span class="cm">// Step 1: Check dedup — idempotencyKey là chìa khóa</span>
+    Optional&lt;ProcessedEvent&gt; existing =
+        processedEventRepo.findById(event.idempotencyKey());
+
+    <span class="kw">if</span> (existing.isPresent()) {
+        log.info(<span class="st">"[DEDUP] Skip duplicate: key={}, originalOffset={}"</span>,
+                 event.idempotencyKey(), existing.get().getKafkaOffset());
+        metrics.dupSkipped.increment();
+        <span class="kw">return</span> ProcessResult.fromExisting(existing.get());
+    }
+
+    <span class="cm">// Step 2: Business logic (chưa xử lý trước đây)</span>
+    PaymentResult result = executePayment(event);
+
+    <span class="cm">// Step 3: Ghi processed_events + business data — cùng transaction</span>
+    processedEventRepo.save(ProcessedEvent.builder()
+        .idempotencyKey(event.idempotencyKey())
+        .eventId(event.eventId())
+        .resultPayload(toJson(result))
+        .processedAt(Instant.now())
+        .consumerGroup(<span class="st">"payment-processor"</span>)
+        .kafkaTopic(record.topic())
+        .kafkaPartition(record.partition())
+        .kafkaOffset(record.offset())
+        .build());
+
+    <span class="kw">return</span> ProcessResult.of(result);
+    <span class="cm">// Commit DB: business data + processed_events — atomic</span>
+}</pre>
+  <div class="co cs"><strong>UPSERT tốt hơn SELECT + INSERT:</strong> Dùng <code>INSERT INTO processed_events ... ON CONFLICT (idempotency_key) DO NOTHING</code>. Atomic hơn, tránh race condition khi concurrent consumers xử lý cùng message trong cùng lúc.</div>
+</div>
+
+<!-- 10: Dedup Redis -->
+<div class="panel" id="panel-10">
+  <div class="pp">Phase 4 — Consumer + Dedup</div>
+  <div class="pt">Dedup Layer — Redis cache (notification service)</div>
+  <div class="pd">Notification không cần độ bền như payment. Redis TTL-based dedup đủ dùng và nhanh hơn nhiều. Duplicate trong window TTL bị blocked — sau đó có thể gửi lại (acceptable với notifications).</div>
+  <pre><span class="kw">public class</span> NotificationDeduplicator {
+    <span class="kw">private final</span> RedisTemplate&lt;String, String&gt; redis;
+    <span class="kw">private static final</span> Duration TTL = Duration.ofHours(<span class="nm">24</span>);
+
+    <span class="kw">public boolean</span> tryMarkProcessed(String idempotencyKey) {
+        String key = <span class="st">"notif:dedup:"</span> + idempotencyKey;
+
+        <span class="cm">// SET NX EX — atomic: chỉ set nếu chưa tồn tại</span>
+        Boolean absent = redis.opsForValue().setIfAbsent(key, <span class="st">"1"</span>, TTL);
+
+        <span class="kw">if</span> (Boolean.TRUE.equals(absent)) {
+            <span class="kw">return true</span>;  <span class="cm">// chưa có → xử lý</span>
+        }
+        log.info(<span class="st">"[DEDUP] Notif dup skipped: {}"</span>, idempotencyKey);
+        metrics.notifDupSkipped.increment();
+        <span class="kw">return false</span>; <span class="cm">// đã có → skip</span>
+    }
+}
+
+<span class="cm">// Usage trong consumer loop</span>
+<span class="kw">for</span> (ConsumerRecord&lt;?,?&gt; record : records) {
+    PaymentResultEvent event = deserialize(record);
+    <span class="kw">if</span> (!deduplicator.tryMarkProcessed(event.idempotencyKey()))
+        <span class="kw">continue</span>;
+    notificationService.send(event);
+}</pre>
+  <div class="g2">
+    <div class="gc"><div class="gct">DB Dedup <span class="bg bok">Payment Processor</span></div>
+      <div class="steps">
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Durable — survive Redis crash</div><div class="sd">Ghi vào PostgreSQL, không mất</div></div></div>
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Full audit trail</div><div class="sd">processed_events là record mọi duplicate</div></div></div>
+        <div class="step ba"><div class="sn">-</div><div class="sb"><div class="st2">Chậm hơn Redis</div><div class="sd">DB round-trip, cần index tốt</div></div></div>
+      </div>
+    </div>
+    <div class="gc"><div class="gct">Redis Dedup <span class="bg bwa">Notification</span></div>
+      <div class="steps">
+        <div class="step ok"><div class="sn">+</div><div class="sb"><div class="st2">Nhanh — microseconds</div><div class="sd">In-memory, throughput cao</div></div></div>
+        <div class="step wa"><div class="sn">!</div><div class="sb"><div class="st2">TTL bounded window 24h</div><div class="sd">Sau 24h có thể gửi lại — acceptable</div></div></div>
+        <div class="step ba"><div class="sn">-</div><div class="sb"><div class="st2">Không durable</div><div class="sd">Redis crash = mất dedup state tạm thời</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 11: Idempotent DB write -->
+<div class="panel" id="panel-11">
+  <div class="pp">Phase 4 — Consumer + Dedup</div>
+  <div class="pt">Idempotent DB write — ledger entry</div>
+  <div class="pd">Business write trong payment processor phải idempotent ở DB level. <code>INSERT ON CONFLICT DO NOTHING</code> là cơ chế cuối cùng để đảm bảo dù dedup check bị race condition, ledger vẫn không bị double-entry.</div>
+  <pre><span class="cm">-- ledger_entries — enforce idempotency tại DB level</span>
+<span class="kw">CREATE TABLE</span> ledger_entries (
+    id               <span class="kw">UUID PRIMARY KEY DEFAULT</span> gen_random_uuid(),
+    idempotency_key  <span class="kw">VARCHAR</span>(<span class="nm">255</span>) <span class="kw">UNIQUE NOT NULL</span>, <span class="cm">-- DB constraint</span>
+    account_id       <span class="kw">VARCHAR</span>(<span class="nm">50</span>)  <span class="kw">NOT NULL</span>,
+    entry_type       <span class="kw">VARCHAR</span>(<span class="nm">10</span>)  <span class="kw">NOT NULL</span>,  <span class="cm">-- DEBIT / CREDIT</span>
+    amount           <span class="kw">DECIMAL</span>(<span class="nm">20</span>,<span class="nm">4</span>) <span class="kw">NOT NULL</span>,
+    currency         <span class="kw">CHAR</span>(<span class="nm">3</span>)      <span class="kw">NOT NULL</span>,
+    payment_id       <span class="kw">VARCHAR</span>(<span class="nm">50</span>)  <span class="kw">NOT NULL</span>,
+    posted_at        <span class="kw">TIMESTAMPTZ  NOT NULL DEFAULT NOW</span>()
+);</pre>
+  <pre><span class="an">@Transactional</span>
+<span class="kw">public</span> LedgerResult postEntries(PaymentEvent event) {
+
+    <span class="cm">// ON CONFLICT DO NOTHING — idempotent at DB level</span>
+    <span class="cm">// Nếu idempotency_key đã tồn tại (duplicate): không insert, không exception</span>
+    <span class="kw">int</span> debitRows = jdbcTemplate.update(<span class="st">"""
+        INSERT INTO ledger_entries
+            (idempotency_key, account_id, entry_type, amount, currency, payment_id)
+        VALUES (?, ?, 'DEBIT', ?, ?, ?)
+        ON CONFLICT (idempotency_key) DO NOTHING
+        """</span>,
+        event.idempotencyKey() + <span class="st">":DEBIT"</span>,
+        event.fromAccount(), event.amount(), event.currency(), event.paymentId()
+    );
+
+    <span class="kw">int</span> creditRows = jdbcTemplate.update(<span class="st">"""
+        INSERT INTO ledger_entries
+            (idempotency_key, account_id, entry_type, amount, currency, payment_id)
+        VALUES (?, ?, 'CREDIT', ?, ?, ?)
+        ON CONFLICT (idempotency_key) DO NOTHING
+        """</span>,
+        event.idempotencyKey() + <span class="st">":CREDIT"</span>,
+        event.toAccount(), event.amount(), event.currency(), event.paymentId()
+    );
+
+    <span class="kw">if</span> (debitRows == <span class="nm">0</span> && creditRows == <span class="nm">0</span>) {
+        log.info(<span class="st">"[DEDUP] Ledger already posted: {}"</span>, event.idempotencyKey());
+        <span class="kw">return</span> LedgerResult.existing(fetchExisting(event.idempotencyKey()));
+    }
+    <span class="kw">return</span> LedgerResult.posted(debitRows, creditRows);
+}</pre>
+</div>
+
+<!-- 12: Offset commit -->
+<div class="panel" id="panel-12">
+  <div class="pp">Phase 4 — Consumer + Dedup</div>
+  <div class="pt">Offset commit — sau khi xử lý thành công</div>
+  <div class="pd">Vòng lặp chính của consumer: poll → dedup → business logic → commit offset. Commit SAU là ALO. Nếu crash trước commit → reprocess → dedup sẽ handle duplicate.</div>
+  <pre><span class="kw">while</span> (running) {
+    ConsumerRecords&lt;String, String&gt; records =
+        consumer.poll(Duration.ofMillis(<span class="nm">500</span>));
+    <span class="kw">if</span> (records.isEmpty()) <span class="kw">continue</span>;
+
+    <span class="kw">boolean</span> batchSuccess = <span class="nm">true</span>;
+
+    <span class="kw">for</span> (ConsumerRecord&lt;String, String&gt; record : records) {
+        <span class="kw">try</span> {
+            PaymentEvent event = deserialize(record.value());
+            processor.processWithDedup(event, record); <span class="cm">// dedup + business + DB</span>
+
+        } <span class="kw">catch</span> (DeserializationException | BusinessException e) {
+            <span class="cm">// Permanent failure → DLQ, tiếp tục batch</span>
+            dlqPublisher.send(record, e, FailureType.PERMANENT);
+
+        } <span class="kw">catch</span> (TransientException e) {
+            <span class="cm">// DB timeout, network blip → KHÔNG commit offset</span>
+            <span class="cm">// Toàn bộ batch sẽ được reprocess → dedup handle</span>
+            batchSuccess = <span class="nm">false</span>;
+            retryHandler.backoff(e);
+            <span class="kw">break</span>;
+        }
+    }
+
+    <span class="kw">if</span> (batchSuccess) {
+        <span class="cm">// Commit ONLY sau khi batch xử lý xong</span>
+        <span class="cm">// (thành công hoặc permanent failures đã DLQ)</span>
+        consumer.<span class="kw">commitSync</span>();
+    }
+    <span class="cm">// !batchSuccess: không commit → reprocess từ đầu batch</span>
+}</pre>
+  <div class="co cw"><strong>Granular commit:</strong> Với batch lớn, commit per-record thay vì per-batch. Dùng <code>consumer.commitSync(Map&lt;TopicPartition, OffsetAndMetadata&gt;)</code> sau mỗi record thành công. Giảm reprocess window khi có lỗi giữa batch.</div>
+</div>
+
+<!-- 13: Ledger -->
+<div class="panel" id="panel-13">
+  <div class="pp">Phase 5 — Finance specifics</div>
+  <div class="pt">Double-entry ledger — balance verification</div>
+  <div class="pd">Finance yêu cầu double-entry: mỗi transaction phải có DEBIT = CREDIT. Consumer không chỉ ghi ledger mà còn verify balance sau mỗi batch và chạy reconciliation job định kỳ.</div>
+  <pre><span class="an">@Transactional</span>(readOnly = <span class="nm">true</span>)
+<span class="kw">public</span> BalanceVerification verifyBalance(String accountId) {
+    BigDecimal accountBalance = accountRepo.getBalance(accountId);
+
+    <span class="cm">// Compute từ ledger</span>
+    BigDecimal ledgerBalance = jdbcTemplate.queryForObject(<span class="st">"""
+        SELECT SUM(
+            CASE WHEN entry_type='CREDIT' THEN amount ELSE -amount END
+        )
+        FROM ledger_entries WHERE account_id = ?
+        """</span>, BigDecimal.class, accountId);
+
+    <span class="kw">boolean</span> balanced = accountBalance.compareTo(ledgerBalance) == <span class="nm">0</span>;
+
+    <span class="kw">if</span> (!balanced) {
+        <span class="cm">// CRITICAL alert ngay lập tức</span>
+        alerting.critical(<span class="st">"LEDGER IMBALANCE"</span>, Map.of(
+            <span class="st">"accountId"</span>, accountId,
+            <span class="st">"accountBalance"</span>, accountBalance,
+            <span class="st">"ledgerBalance"</span>, ledgerBalance,
+            <span class="st">"diff"</span>, accountBalance.subtract(ledgerBalance)
+        ));
+    }
+    <span class="kw">return new</span> BalanceVerification(accountId, balanced, ledgerBalance);
+}
+
+<span class="cm">// Reconciliation job — chạy mỗi giờ</span>
+<span class="an">@Scheduled</span>(cron = <span class="st">"0 0 * * * *"</span>)
+<span class="kw">public void</span> reconcileAll() {
+    <span class="cm">// Kiểm tra tổng toàn hệ thống: SUM(DEBIT) == SUM(CREDIT)</span>
+    <span class="cm">// Bất kỳ imbalance → INCIDENT</span>
+    BigDecimal totalDebits  = ledgerRepo.sumByType(<span class="st">"DEBIT"</span>);
+    BigDecimal totalCredits = ledgerRepo.sumByType(<span class="st">"CREDIT"</span>);
+    <span class="kw">if</span> (totalDebits.compareTo(totalCredits) != <span class="nm">0</span>)
+        alerting.incident(<span class="st">"SYSTEM LEDGER IMBALANCE"</span>, totalDebits, totalCredits);
+}</pre>
+</div>
+
+<!-- 14: Saga -->
+<div class="panel" id="panel-14">
+  <div class="pp">Phase 5 — Finance specifics</div>
+  <div class="pt">Saga pattern — compensating transactions</div>
+  <div class="pd">Multi-step payment (debit → transfer → credit) cần Saga. Nếu step sau fail, các steps trước phải được compensate bằng reverse entries — không xóa entry cũ, chỉ ghi entry ngược chiều.</div>
+  <pre><span class="cm">// Step 1: Nhận payment-requests → debit</span>
+<span class="kw">public void</span> onPaymentRequested(PaymentEvent event) {
+    <span class="kw">if</span> (!dedup.check(event.idempotencyKey() + <span class="st">":DEBIT"</span>)) <span class="kw">return</span>;
+    <span class="kw">try</span> {
+        ledger.debit(event.fromAccount(), event.amount());
+        publisher.publish(<span class="st">"payment-debited"</span>, PaymentDebitedEvent.of(event));
+    } <span class="kw">catch</span> (InsufficientFundsException e) {
+        publisher.publish(<span class="st">"payment-failed"</span>, FailedEvent.of(event, <span class="st">"INSUFFICIENT"</span>));
+    }
+}
+
+<span class="cm">// Step 2: Nhận payment-debited → credit</span>
+<span class="kw">public void</span> onPaymentDebited(PaymentDebitedEvent event) {
+    <span class="kw">if</span> (!dedup.check(event.idempotencyKey() + <span class="st">":CREDIT"</span>)) <span class="kw">return</span>;
+    <span class="kw">try</span> {
+        ledger.credit(event.toAccount(), event.amount());
+        publisher.publish(<span class="st">"payment-completed"</span>, CompletedEvent.of(event));
+    } <span class="kw">catch</span> (Exception e) {
+        <span class="cm">// Credit fail → cần compensate debit</span>
+        publisher.publish(<span class="st">"payment-credit-failed"</span>, CreditFailedEvent.of(event, e));
+    }
+}
+
+<span class="cm">// Compensation: Nhận payment-credit-failed → reverse debit</span>
+<span class="kw">public void</span> onCreditFailed(CreditFailedEvent event) {
+    String key = event.idempotencyKey() + <span class="st">":DEBIT:REVERSAL"</span>;
+    <span class="kw">if</span> (!dedup.check(key)) <span class="kw">return</span>;
+
+    <span class="cm">// Reverse entry — KHÔNG xóa entry cũ (audit trail)</span>
+    ledger.credit(event.fromAccount(), event.amount());
+    auditLog.write(<span class="st">"PAYMENT_REVERSED"</span>, event);
+    publisher.publish(<span class="st">"payment-reversed"</span>, ReversedEvent.of(event));
+}</pre>
+  <div class="co cp"><strong>Idempotency trong Saga:</strong> Mỗi step có key riêng (<code>:DEBIT</code>, <code>:CREDIT</code>, <code>:DEBIT:REVERSAL</code>). Dù step được retry bao nhiêu lần, chỉ một lần được thực thi. Compensation cũng phải idempotent.</div>
+</div>
+
+<!-- 15: Audit -->
+<div class="panel" id="panel-15">
+  <div class="pp">Phase 5 — Finance specifics</div>
+  <div class="pt">Audit trail — consumer không cần dedup</div>
+  <div class="pd">Audit service là exception: không cần dedup vì audit log là append-only. Mỗi delivery (kể cả duplicate) được ghi lại — điều này thực ra có lợi cho forensics: "message này được nhận 2 lần".</div>
+  <pre><span class="cm">// Audit consumer — đơn giản nhất, không có dedup layer</span>
+<span class="kw">public void</span> processAuditEvent(ConsumerRecord&lt;String, String&gt; record) {
+    PaymentEvent event = deserialize(record.value());
+
+    <span class="cm">// Ghi mọi delivery — kể cả duplicate</span>
+    auditStore.append(AuditEntry.builder()
+        .eventId(event.eventId())
+        .idempotencyKey(event.idempotencyKey())
+        .payload(record.value())           <span class="cm">// raw value</span>
+        .kafkaTopic(record.topic())
+        .kafkaPartition(record.partition())
+        .kafkaOffset(record.offset())
+        .kafkaTimestamp(Instant.ofEpochMilli(record.timestamp()))
+        .receivedAt(Instant.now())
+        .build());
+
+    <span class="cm">// Analyst thấy: "delivery tại offset 123 và offset 456"</span>
+    <span class="cm">// → valuable evidence, không phải noise</span>
+}
+
+<span class="cm">-- Enforce immutability với PostgreSQL rules</span>
+<span class="kw">CREATE RULE</span> no_update <span class="kw">AS ON UPDATE TO</span> audit_entries <span class="kw">DO INSTEAD NOTHING</span>;
+<span class="kw">CREATE RULE</span> no_delete <span class="kw">AS ON DELETE TO</span> audit_entries <span class="kw">DO INSTEAD NOTHING</span>;</pre>
+  <div class="co ci"><strong>Audit immutability:</strong> Audit table phải có <code>GRANT INSERT ONLY</code>. Dùng PostgreSQL row-level security hoặc dedicated append-only storage (ClickHouse, TimescaleDB) để enforce. Regulator yêu cầu audit log không thể bị sửa.</div>
+</div>
+
+<!-- 16: DLQ -->
+<div class="panel" id="panel-16">
+  <div class="pp">Phase 5 — Finance specifics</div>
+  <div class="pt">Dead Letter Queue — finance grade</div>
+  <div class="pd">Finance DLQ cần đủ thông tin để ops team quyết định: retry, manual fix, hay escalate. Không "just drop it" — mọi failed message phải có audit trail và human review trước khi replay.</div>
+  <pre><span class="kw">public void</span> send(ConsumerRecord&lt;?,?&gt; original, Exception reason, FailureType type) {
+    Headers headers = <span class="nm">new</span> RecordHeaders()
+        .add(<span class="st">"dlq-failure-type"</span>,      type.name().getBytes())
+        .add(<span class="st">"dlq-reason"</span>,             truncate(reason.getMessage()).getBytes())
+        .add(<span class="st">"dlq-exception-class"</span>,    reason.getClass().getName().getBytes())
+        .add(<span class="st">"dlq-original-topic"</span>,     original.topic().getBytes())
+        .add(<span class="st">"dlq-original-partition"</span>,  intToBytes(original.partition()))
+        .add(<span class="st">"dlq-original-offset"</span>,     longToBytes(original.offset()))
+        .add(<span class="st">"dlq-consumer-group"</span>,      groupId.getBytes())
+        .add(<span class="st">"dlq-timestamp"</span>,           Instant.now().toString().getBytes());
+
+    producer.send(<span class="nm">new</span> ProducerRecord&lt;&gt;(
+        <span class="st">"payment-dead-letter"</span>,
+        <span class="nm">null</span>, original.key(), original.value(), headers
+    ));
+
+    log.error(<span class="st">"[DLQ] type={} topic={} offset={} key={}"</span>,
+              type, original.topic(), original.offset(), original.key());
+}
+
+<span class="kw">public enum</span> FailureType {
+    DESERIALIZATION_ERROR,  <span class="cm">// payload corrupt</span>
+    VALIDATION_ERROR,       <span class="cm">// business rule violation</span>
+    ACCOUNT_NOT_FOUND,      <span class="cm">// reference data issue</span>
+    COMPLIANCE_REJECT,      <span class="cm">// fraud / AML block</span>
+    PERMANENT_SYSTEM_ERROR  <span class="cm">// downstream permanently unavailable</span>
+}</pre>
+  <div class="co cd"><strong>DLQ reprocessing:</strong> Cần UI cho ops: (1) view messages với đầy đủ context, (2) replay selected messages về topic gốc, (3) approve/reject từng message — không được bulk replay mà không có human review trong finance.</div>
+</div>
+
+<!-- 17: Monitoring -->
+<div class="panel" id="panel-17">
+  <div class="pp">Phase 6 — Production</div>
+  <div class="pt">Monitoring &amp; alerting — finance grade</div>
+  <div class="pd">Finance cần monitoring chặt hơn: không chỉ infrastructure metrics mà cả business metrics — balance drift, duplicate rate, saga completion rate, outbox health.</div>
+  <table class="tb">
+    <tr><th>Metric</th><th>Threshold</th><th>Severity</th></tr>
+    <tr><td>consumer.lag (payment)</td><td>&gt; 1000 growing 5m</td><td>WARNING</td></tr>
+    <tr><td>consumer.lag (payment)</td><td>&gt; 10000</td><td>CRITICAL</td></tr>
+    <tr><td>dedup.rate</td><td>&gt; 5%</td><td>WARNING — upstream retry vấn đề</td></tr>
+    <tr><td>dedup.rate</td><td>&gt; 20%</td><td>CRITICAL</td></tr>
+    <tr><td>dlq.messages.total</td><td>&gt; 0</td><td>WARNING — cần ops review</td></tr>
+    <tr><td>ledger.balance.drift</td><td>&gt; 0</td><td>CRITICAL — imbalance!</td></tr>
+    <tr><td>saga.compensation.rate</td><td>&gt; 1%</td><td>WARNING</td></tr>
+    <tr><td>outbox.pending.count</td><td>&gt; 1000 growing</td><td>CRITICAL</td></tr>
+    <tr><td>outbox.failed.count</td><td>&gt; 0</td><td>CRITICAL — stuck messages</td></tr>
+    <tr><td>db.dedup.query.p99</td><td>&gt; 50ms</td><td>WARNING — index degradation</td></tr>
+  </table>
+  <div class="sc">Pre-production checklist</div>
+  <ul class="chk">
+    <li>Broker: min.insync.replicas = 2 cho tất cả finance topics</li>
+    <li>Broker: replication.factor = 3</li>
+    <li>Topics: retention.ms đủ cho audit requirement (30 ngày min)</li>
+    <li>Producer: acks = all</li>
+    <li>Producer: retries = MAX_INT</li>
+    <li>Consumer: enable.auto.commit = false</li>
+    <li>Consumer: max.poll.records = 100 (không quá lớn)</li>
+    <li>Code: idempotencyKey trong mọi event, stable per operation</li>
+    <li>DB: processed_events table với index trên idempotency_key</li>
+    <li>DB: ledger_entries UNIQUE constraint trên idempotency_key</li>
+    <li>Code: commitSync() SAU khi xử lý xong batch</li>
+    <li>Code: DLQ write với đầy đủ headers</li>
+    <li>Code: Balance verification sau mỗi batch</li>
+    <li>Code: Reconciliation job chạy định kỳ</li>
+    <li class="w">Test: duplicate message → single ledger entry</li>
+    <li class="w">Test: crash trước commit → reprocess → dedup OK</li>
+    <li class="w">Test: Kafka unavailable → outbox accumulates, publishes on recovery</li>
+    <li class="w">Test: Saga compensation → balance stays correct</li>
+    <li class="d">Audit table: immutability enforced (no UPDATE/DELETE)</li>
+    <li class="d">DLQ: human review process documented</li>
+  </ul>
+</div>
+
+<!-- 18: Testing -->
+<div class="panel" id="panel-18">
+  <div class="pp">Phase 6 — Production</div>
+  <div class="pt">Testing strategy — ALO specific</div>
+  <div class="pd">ALO cần test dedup behavior đặc biệt. Không chỉ happy path mà còn: duplicate delivery, crash recovery, concurrent processing, và balance reconciliation.</div>
+  <pre><span class="an">@Testcontainers</span>
+<span class="kw">class</span> PaymentProcessorAloTest {
+
+    <span class="an">@Test</span>
+    <span class="kw">void</span> duplicate_message_does_not_double_debit() {
+        PaymentEvent event = buildPaymentEvent(<span class="st">"ACC-A"</span>, <span class="st">"ACC-B"</span>, <span class="nm">100.00</span>);
+
+        <span class="cm">// Publish TWICE — simulating ALO duplicate delivery</span>
+        publishToKafka(event); <span class="cm">// first delivery</span>
+        publishToKafka(event); <span class="cm">// duplicate</span>
+
+        await().atMost(<span class="nm">10</span>, SECONDS).until(() ->
+            processedEventRepo.existsById(event.idempotencyKey()));
+
+        <span class="cm">// SINGLE ledger entry, not double</span>
+        assertThat(ledgerRepo.countByKey(event.idempotencyKey() + <span class="st">":DEBIT"</span>))
+            .isEqualTo(<span class="nm">1</span>);  <span class="cm">// NOT 2</span>
+
+        <span class="cm">// Balance correct</span>
+        assertThat(accountRepo.getBalance(<span class="st">"ACC-A"</span>))
+            .isEqualByComparingTo(<span class="st">"900.00"</span>);  <span class="cm">// NOT 800.00</span>
+    }
+
+    <span class="an">@Test</span>
+    <span class="kw">void</span> crash_before_commit_reprocesses_safely() {
+        PaymentEvent event = buildPaymentEvent(...);
+        publishToKafka(event);
+
+        <span class="cm">// Process but "crash" before commitSync()</span>
+        processor.processRecord(event); <span class="cm">// business done, DB committed</span>
+        <span class="cm">// DO NOT call commitSync() — simulate crash</span>
+
+        <span class="cm">// Restart — reprocesses from last committed offset</span>
+        processor.restart();
+        processor.processRecord(event); <span class="cm">// duplicate delivery</span>
+        processor.commitSync();
+
+        <span class="cm">// Still single ledger entry — dedup saved us</span>
+        assertThat(ledgerRepo.countByPaymentId(event.paymentId()))
+            .isEqualTo(<span class="nm">2</span>); <span class="cm">// DEBIT + CREDIT, not 4</span>
+        verifyBalanced(<span class="st">"ACC-A"</span>, <span class="st">"ACC-B"</span>);
+    }
+
+    <span class="an">@Test</span>
+    <span class="kw">void</span> outbox_retries_when_kafka_unavailable() {
+        kafka.stop();
+        paymentApi.initiatePayment(buildRequest());
+        assertThat(outboxRepo.countByStatus(<span class="st">"PENDING"</span>)).isEqualTo(<span class="nm">1</span>);
+
+        kafka.start();
+        await().atMost(<span class="nm">30</span>, SECONDS).until(() ->
+            outboxRepo.countByStatus(<span class="st">"PUBLISHED"</span>) == <span class="nm">1</span>);
+    }
+}</pre>
+</div>
+
+<!-- 19: Full flow diagram -->
+<div class="panel" id="panel-19">
+  <div class="pp">Phase 6 — Production</div>
+  <div class="pt">Full ALO finance flow diagram</div>
+  <div class="pd">Toàn bộ flow At-Least-Once cho finance — từ API request đến ledger posted và notifications, với dedup layers và compensation path.</div>
+  <div class="dg">
+    <div class="dgl">At-Least-Once — complete finance payment flow</div>
+    <svg viewBox="0 0 680 740" style="padding:12px 6px">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+      <!-- API -->
+      <rect x="210" y="8" width="260" height="36" rx="8" fill="var(--bgi)" stroke="var(--bdi)" stroke-width="0.5"/>
+      <text class="svgth" x="340" y="30" text-anchor="middle" dominant-baseline="central" fill="var(--txi)">Payment API — receive request</text>
+      <line x1="340" y1="44" x2="340" y2="68" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+
+      <!-- DB Txn block -->
+      <rect x="30" y="68" width="620" height="96" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5" stroke-dasharray="5 3"/>
+      <text class="svgts" x="46" y="84" fill="var(--tx3)">Single DB transaction — atomic</text>
+      <rect x="52" y="92" width="140" height="54" rx="6" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="122" y="110" text-anchor="middle" dominant-baseline="central">Validate</text>
+      <text class="svgts" x="122" y="127" text-anchor="middle">balance, AML, KYC</text>
+      <text class="svgts" x="122" y="140" text-anchor="middle">limits check</text>
+      <line x1="192" y1="119" x2="224" y2="119" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="226" y="92" width="148" height="54" rx="6" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="300" y="110" text-anchor="middle" dominant-baseline="central">Write payments</text>
+      <text class="svgts" x="300" y="127" text-anchor="middle">UPDATE accounts</text>
+      <text class="svgts" x="300" y="140" text-anchor="middle">INSERT payment</text>
+      <line x1="374" y1="119" x2="406" y2="119" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="408" y="92" width="210" height="54" rx="6" fill="var(--bgw)" stroke="var(--bdw)" stroke-width="0.5"/>
+      <text class="svgth" x="513" y="110" text-anchor="middle" dominant-baseline="central" fill="var(--txw)">INSERT outbox</text>
+      <text class="svgts" x="513" y="127" text-anchor="middle" fill="var(--txw)">same DB transaction</text>
+      <text class="svgts" x="513" y="140" text-anchor="middle" fill="var(--txw)">status = PENDING</text>
+
+      <!-- Outbox worker -->
+      <line x1="513" y1="164" x2="513" y2="192" stroke="var(--bdw)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+      <rect x="400" y="192" width="242" height="32" rx="8" fill="var(--bgw)" stroke="var(--bdw)" stroke-width="0.5"/>
+      <text class="svgth" x="521" y="212" text-anchor="middle" dominant-baseline="central" fill="var(--txw)">Outbox Worker → Kafka (acks=all)</text>
+
+      <!-- Kafka bus -->
+      <line x1="460" y1="224" x2="380" y2="250" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="110" y="250" width="440" height="32" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="330" y="270" text-anchor="middle" dominant-baseline="central">payment-requests (acks=all, ISR=2)</text>
+
+      <!-- Consumer block -->
+      <line x1="330" y1="282" x2="330" y2="308" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="30" y="308" width="620" height="176" rx="8" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5" stroke-dasharray="5 3" opacity="0.7"/>
+      <rect x="30" y="308" width="620" height="176" rx="8" fill="none" stroke="var(--bds)" stroke-width="1"/>
+      <text class="svgts" x="46" y="324" fill="var(--txs)">Payment Processor Consumer (ALO + DB dedup)</text>
+
+      <rect x="50" y="332" width="158" height="52" rx="6" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5"/>
+      <text class="svgth" x="129" y="349" text-anchor="middle" dominant-baseline="central" fill="var(--txs)">Dedup check</text>
+      <text class="svgts" x="129" y="366" text-anchor="middle" fill="var(--txs)">processed_events</text>
+      <text class="svgts" x="129" y="379" text-anchor="middle" fill="var(--txs)">by idempotency_key</text>
+
+      <line x1="208" y1="358" x2="240" y2="358" stroke="var(--bds)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="242" y="332" width="156" height="52" rx="6" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5"/>
+      <text class="svgth" x="320" y="349" text-anchor="middle" dominant-baseline="central" fill="var(--txs)">Business logic</text>
+      <text class="svgts" x="320" y="366" text-anchor="middle" fill="var(--txs)">validateAndProcess</text>
+      <text class="svgts" x="320" y="379" text-anchor="middle" fill="var(--txs)">payment()</text>
+
+      <line x1="398" y1="358" x2="430" y2="358" stroke="var(--bds)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="432" y="332" width="196" height="52" rx="6" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5"/>
+      <text class="svgth" x="530" y="349" text-anchor="middle" dominant-baseline="central" fill="var(--txs)">Atomic DB write</text>
+      <text class="svgts" x="530" y="366" text-anchor="middle" fill="var(--txs)">ledger_entries +</text>
+      <text class="svgts" x="530" y="379" text-anchor="middle" fill="var(--txs)">processed_events</text>
+
+      <rect x="174" y="414" width="310" height="30" rx="6" fill="var(--bgs)" stroke="var(--bds)" stroke-width="0.5"/>
+      <text class="svgth" x="329" y="433" text-anchor="middle" dominant-baseline="central" fill="var(--txs)">consumer.commitSync() — after batch success</text>
+
+      <!-- Dup skip path -->
+      <path d="M 50 340 L 28 340 L 28 500 L 105 500" fill="none" stroke="var(--tx3)" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+      <text class="svgts" x="18" y="418" text-anchor="middle" fill="var(--tx3)">dup</text>
+      <text class="svgts" x="18" y="432" text-anchor="middle" fill="var(--tx3)">skip</text>
+
+      <!-- Output row -->
+      <line x1="329" y1="444" x2="329" y2="472" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <line x1="530" y1="384" x2="530" y2="460" stroke="var(--bd2)" stroke-width="1"/>
+      <path d="M 530 460 L 530 486 L 430 486 L 430 472" fill="none" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+
+      <rect x="105" y="472" width="195" height="30" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="202" y="491" text-anchor="middle" dominant-baseline="central">publish payment-results</text>
+
+      <rect x="340" y="472" width="180" height="30" rx="8" fill="var(--bgp)" stroke="var(--bdp)" stroke-width="0.5"/>
+      <text class="svgth" x="430" y="491" text-anchor="middle" dominant-baseline="central" fill="var(--txp)">publish audit-events</text>
+
+      <!-- Downstream -->
+      <line x1="202" y1="502" x2="202" y2="530" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="105" y="530" width="195" height="30" rx="8" fill="var(--bgw)" stroke="var(--bdw)" stroke-width="0.5"/>
+      <text class="svgth" x="202" y="549" text-anchor="middle" dominant-baseline="central" fill="var(--txw)">Notification (Redis dedup)</text>
+
+      <line x1="430" y1="502" x2="430" y2="530" stroke="var(--bdp)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="340" y="530" width="180" height="30" rx="8" fill="var(--bgp)" stroke="var(--bdp)" stroke-width="0.5"/>
+      <text class="svgth" x="430" y="549" text-anchor="middle" dominant-baseline="central" fill="var(--txp)">Audit (no dedup)</text>
+
+      <!-- DB outputs -->
+      <line x1="202" y1="560" x2="202" y2="592" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="105" y="592" width="195" height="30" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="svgth" x="202" y="611" text-anchor="middle" dominant-baseline="central">PostgreSQL — ledger</text>
+
+      <line x1="430" y1="560" x2="430" y2="592" stroke="var(--bdp)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <rect x="340" y="592" width="180" height="30" rx="8" fill="var(--bg2)" stroke="var(--bdp)" stroke-width="0.5"/>
+      <text class="svgth" x="430" y="611" text-anchor="middle" dominant-baseline="central" fill="var(--txp)">Audit Store — immutable</text>
+
+      <!-- DLQ -->
+      <rect x="546" y="370" width="110" height="42" rx="6" fill="var(--bgd)" stroke="var(--bdd)" stroke-width="0.5"/>
+      <text class="svgth" x="601" y="386" text-anchor="middle" dominant-baseline="central" fill="var(--txd)">DLQ</text>
+      <text class="svgts" x="601" y="400" text-anchor="middle" fill="var(--txd)">permanent fails</text>
+      <path d="M 628 340 L 660 340 L 660 391 L 656 391" fill="none" stroke="var(--txd)" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+
+      <!-- Legend -->
+      <line x1="40" y1="664" x2="66" y2="664" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#a2)"/>
+      <text class="svgts" x="72" y="668">ALO message flow</text>
+      <line x1="40" y1="684" x2="66" y2="684" stroke="var(--bdw)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+      <text class="svgts" x="72" y="688">Outbox async publish</text>
+      <line x1="40" y1="704" x2="66" y2="704" stroke="var(--tx3)" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+      <text class="svgts" x="72" y="708">Duplicate skip path</text>
+      <line x1="40" y1="724" x2="66" y2="724" stroke="var(--txd)" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+      <text class="svgts" x="72" y="728">DLQ path (permanent failure)</text>
+    </svg>
+  </div>
+</div>
+
+<div class="nf">
+  <button id="btn-prev" onclick="go(-1)" disabled>← Trước</button>
+  <button id="btn-next" class="bp" onclick="go(1)">Tiếp →</button>
+  <span class="nc" id="counter">1 / 20</span>
+</div>
+</main>
+</div>
+
+<script>
+const T=20;let c=0;
+function goTo(i){
+  document.getElementById('panel-'+c).classList.remove('active');
+  document.getElementById('nav-'+c).classList.remove('active');
+  document.getElementById('nav-'+c).classList.add('done');
+  c=i;
+  document.getElementById('panel-'+c).classList.add('active');
+  document.querySelectorAll('.ni').forEach((el,idx)=>{el.classList.remove('active');if(idx===c)el.classList.add('active');});
+  document.getElementById('prog').style.width=Math.round((c+1)/T*100)+'%';
+  document.getElementById('counter').textContent=(c+1)+' / '+T;
+  document.getElementById('btn-prev').disabled=c===0;
+  const n=document.getElementById('btn-next');
+  n.disabled=c===T-1;n.textContent=c===T-1?'Hoàn thành':'Tiếp →';
+  document.querySelector('.main').scrollTop=0;
+}
+function go(d){const n=c+d;if(n>=0&&n<T)goTo(n);}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1);});
+</script>
+</body>
+</html>

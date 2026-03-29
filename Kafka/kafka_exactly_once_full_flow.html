@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka Exactly-Once — Full Project Flow</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg2:#f5f4f0;--bg3:#eeecea;
+  --bg-info:#e6f1fb;--bg-success:#eaf3de;--bg-danger:#fcebeb;--bg-warning:#faeeda;
+  --tx:#2c2c2a;--tx2:#5f5e5a;--tx3:#888780;
+  --tx-info:#185fa5;--tx-success:#3b6d11;--tx-danger:#a32d2d;--tx-warning:#854f0b;
+  --bd:rgba(44,44,42,.15);--bd2:rgba(44,44,42,.3);--bd3:rgba(44,44,42,.4);
+  --bd-info:#b5d4f4;--bd-success:#c0dd97;--bd-danger:#f7c1c1;--bd-warning:#fac775;
+  --mono:ui-monospace,'Cascadia Code',monospace;
+  --sans:system-ui,-apple-system,sans-serif;
+  --r:8px;--rl:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e1e1c;--bg2:#2c2c2a;--bg3:#383836;
+  --bg-info:#042c53;--bg-success:#173404;--bg-danger:#501313;--bg-warning:#412402;
+  --tx:#e8e6de;--tx2:#b4b2a9;--tx3:#888780;
+  --tx-info:#85b7eb;--tx-success:#97c459;--tx-danger:#f09595;--tx-warning:#ef9f27;
+  --bd:rgba(232,230,222,.15);--bd2:rgba(232,230,222,.3);--bd3:rgba(232,230,222,.4);
+  --bd-info:#0c447c;--bd-success:#27500a;--bd-danger:#791f1f;--bd-warning:#633806;
+}}
+body{font-family:var(--sans);background:var(--bg);color:var(--tx);font-size:14px;line-height:1.6;padding:0}
+
+/* Layout */
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+.sidebar{border-right:0.5px solid var(--bd);padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--bg)}
+.main{padding:32px 36px;overflow-y:auto}
+
+/* Sidebar nav */
+.sidebar-title{font-size:11px;font-weight:500;color:var(--tx3);letter-spacing:.06em;padding:0 20px;margin-bottom:12px;text-transform:uppercase}
+.phase-group{margin-bottom:8px}
+.phase-label{font-size:11px;color:var(--tx3);padding:4px 20px;font-weight:500}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 20px;cursor:pointer;font-size:13px;color:var(--tx2);border-left:2px solid transparent;transition:all .15s}
+.nav-item:hover{background:var(--bg2);color:var(--tx)}
+.nav-item.active{color:var(--tx-info);border-left-color:var(--tx-info);background:var(--bg-info)}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:var(--bd2);flex-shrink:0;transition:background .15s}
+.nav-item.active .nav-dot{background:var(--tx-info)}
+.nav-item.done .nav-dot{background:var(--tx-success)}
+.nav-item.done{color:var(--tx2)}
+
+/* Content panels */
+.panel{display:none}
+.panel.active{display:block}
+.panel-header{margin-bottom:24px;padding-bottom:20px;border-bottom:0.5px solid var(--bd)}
+.panel-phase{font-size:11px;font-weight:500;color:var(--tx3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px}
+.panel-title{font-size:20px;font-weight:500;color:var(--tx);margin-bottom:8px}
+.panel-desc{font-size:14px;color:var(--tx2);line-height:1.7}
+
+/* Code blocks */
+pre{font-family:var(--mono);font-size:12px;line-height:1.75;background:var(--bg2);border:0.5px solid var(--bd);border-radius:var(--r);padding:16px 18px;overflow-x:auto;margin:12px 0}
+code{font-family:var(--mono);font-size:11px;background:var(--bg2);padding:1px 5px;border-radius:4px}
+.kw{color:var(--tx-info);font-weight:500}
+.cm{color:var(--tx3);font-style:italic}
+.st{color:var(--tx-success)}
+.nm{color:var(--tx-warning)}
+.er{color:var(--tx-danger);font-weight:500}
+
+/* Diagram container */
+.diagram-wrap{border:0.5px solid var(--bd);border-radius:var(--rl);overflow:hidden;margin:16px 0}
+.diagram-label{font-size:11px;color:var(--tx3);padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--bd)}
+
+/* Callout boxes */
+.callout{border-radius:var(--r);padding:12px 16px;margin:12px 0;font-size:13px;line-height:1.6;border:0.5px solid}
+.callout-info{background:var(--bg-info);border-color:var(--bd-info);color:var(--tx-info)}
+.callout-success{background:var(--bg-success);border-color:var(--bd-success);color:var(--tx-success)}
+.callout-danger{background:var(--bg-danger);border-color:var(--bd-danger);color:var(--tx-danger)}
+.callout-warning{background:var(--bg-warning);border-color:var(--bd-warning);color:var(--tx-warning)}
+.callout strong{font-weight:500}
+
+/* Section headings inside panel */
+.section-title{font-size:14px;font-weight:500;color:var(--tx);margin:24px 0 8px}
+.section-title:first-child{margin-top:0}
+
+/* Config table */
+.cfg-table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+.cfg-table th{text-align:left;font-weight:500;font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;padding:6px 10px;border-bottom:0.5px solid var(--bd)}
+.cfg-table td{padding:8px 10px;border-bottom:0.5px solid var(--bd);vertical-align:top}
+.cfg-table td:first-child{font-family:var(--mono);font-size:11px;color:var(--tx-info);white-space:nowrap}
+.cfg-table td:nth-child(2){color:var(--tx-warning);font-family:var(--mono);font-size:11px}
+.cfg-table td:nth-child(3){color:var(--tx2)}
+.cfg-table tr:last-child td{border-bottom:none}
+
+/* Nav footer */
+.nav-footer{display:flex;gap:8px;margin-top:32px;padding-top:20px;border-top:0.5px solid var(--bd)}
+button{font-family:var(--sans);font-size:13px;padding:7px 18px;border-radius:var(--r);border:0.5px solid var(--bd2);background:transparent;color:var(--tx);cursor:pointer;transition:background .15s}
+button:hover{background:var(--bg2)}
+button:disabled{opacity:.3;cursor:not-allowed}
+.btn-primary{background:var(--bg-info);color:var(--tx-info);border-color:var(--bd-info)}
+.btn-primary:hover{opacity:.9}
+
+/* Progress */
+.progress-bar{height:3px;background:var(--bd);border-radius:2px;margin-bottom:24px;overflow:hidden}
+.progress-fill{height:100%;background:var(--tx-info);border-radius:2px;transition:width .3s ease}
+
+/* Flow steps inline */
+.flow-steps{display:flex;flex-direction:column;gap:8px;margin:14px 0}
+.flow-step{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:var(--r);border:0.5px solid var(--bd);background:var(--bg)}
+.flow-step-num{width:22px;height:22px;border-radius:50%;background:var(--bg2);border:0.5px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--tx2);flex-shrink:0;margin-top:1px}
+.flow-step-body{flex:1}
+.flow-step-title{font-size:13px;font-weight:500;color:var(--tx);margin-bottom:2px}
+.flow-step-desc{font-size:12px;color:var(--tx2)}
+.flow-step.ok .flow-step-num{background:var(--bg-success);border-color:var(--bd-success);color:var(--tx-success)}
+.flow-step.warn .flow-step-num{background:var(--bg-warning);border-color:var(--bd-warning);color:var(--tx-warning)}
+.flow-step.err .flow-step-num{background:var(--bg-danger);border-color:var(--bd-danger);color:var(--tx-danger)}
+
+/* Checklist */
+.checklist{list-style:none;margin:10px 0;display:flex;flex-direction:column;gap:4px}
+.checklist li{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--tx2);padding:4px 0}
+.checklist li::before{content:"";width:14px;height:14px;border-radius:3px;border:0.5px solid var(--bd-success);background:var(--bg-success);flex-shrink:0;margin-top:2px}
+.checklist li.warn::before{border-color:var(--bd-warning);background:var(--bg-warning)}
+.checklist li.err::before{border-color:var(--bd-danger);background:var(--bg-danger)}
+
+/* SVG */
+svg{display:block;width:100%}
+.th{font-family:var(--sans);font-size:14px;font-weight:500;fill:var(--tx)}
+.ts{font-family:var(--sans);font-size:12px;fill:var(--tx2)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-title">EOS Project Flow</div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 1 — Setup</div>
+    <div class="nav-item active" onclick="goTo(0)" id="nav-0"><span class="nav-dot"></span>Broker config</div>
+    <div class="nav-item" onclick="goTo(1)" id="nav-1"><span class="nav-dot"></span>Topic setup</div>
+    <div class="nav-item" onclick="goTo(2)" id="nav-2"><span class="nav-dot"></span>Dependencies</div>
+  </div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 2 — Producer</div>
+    <div class="nav-item" onclick="goTo(3)" id="nav-3"><span class="nav-dot"></span>Idempotent config</div>
+    <div class="nav-item" onclick="goTo(4)" id="nav-4"><span class="nav-dot"></span>Transactional ID</div>
+    <div class="nav-item" onclick="goTo(5)" id="nav-5"><span class="nav-dot"></span>initTransactions()</div>
+  </div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 3 — Consumer</div>
+    <div class="nav-item" onclick="goTo(6)" id="nav-6"><span class="nav-dot"></span>read_committed</div>
+    <div class="nav-item" onclick="goTo(7)" id="nav-7"><span class="nav-dot"></span>Manual offset</div>
+  </div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 4 — Transaction loop</div>
+    <div class="nav-item" onclick="goTo(8)" id="nav-8"><span class="nav-dot"></span>Business logic ngoài txn</div>
+    <div class="nav-item" onclick="goTo(9)" id="nav-9"><span class="nav-dot"></span>beginTransaction()</div>
+    <div class="nav-item" onclick="goTo(10)" id="nav-10"><span class="nav-dot"></span>send() outputs</div>
+    <div class="nav-item" onclick="goTo(11)" id="nav-11"><span class="nav-dot"></span>sendOffsetsToTransaction()</div>
+    <div class="nav-item" onclick="goTo(12)" id="nav-12"><span class="nav-dot"></span>commitTransaction()</div>
+  </div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 5 — Error handling</div>
+    <div class="nav-item" onclick="goTo(13)" id="nav-13"><span class="nav-dot"></span>ProducerFencedException</div>
+    <div class="nav-item" onclick="goTo(14)" id="nav-14"><span class="nav-dot"></span>KafkaException + abort</div>
+    <div class="nav-item" onclick="goTo(15)" id="nav-15"><span class="nav-dot"></span>Dead letter queue</div>
+  </div>
+
+  <div class="phase-group">
+    <div class="phase-label">Phase 6 — Production</div>
+    <div class="nav-item" onclick="goTo(16)" id="nav-16"><span class="nav-dot"></span>Kubernetes + unique ID</div>
+    <div class="nav-item" onclick="goTo(17)" id="nav-17"><span class="nav-dot"></span>Monitoring checklist</div>
+    <div class="nav-item" onclick="goTo(18)" id="nav-18"><span class="nav-dot"></span>Full flow diagram</div>
+  </div>
+</nav>
+
+<!-- Main content -->
+<main class="main">
+<div class="progress-bar"><div class="progress-fill" id="prog" style="width:5%"></div></div>
+
+<!-- Panel 0: Broker config -->
+<div class="panel active" id="panel-0">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 1 — Setup</div>
+    <div class="panel-title">Broker configuration</div>
+    <div class="panel-desc">Trước khi viết một dòng code nào, broker phải được cấu hình đúng. EOS phụ thuộc hoàn toàn vào <code>__transaction_state</code> topic — nếu topic này mất data, toàn bộ transaction state biến mất.</div>
+  </div>
+  <div class="callout callout-danger"><strong>Critical:</strong> Nếu <code>transaction.state.log.replication.factor=1</code> và broker chết, mọi transaction đang chờ đều bị mất state. Production bắt buộc = 3.</div>
+  <div class="section-title">server.properties</div>
+  <pre><span class="cm"># Transaction state — đây là "source of truth" cho mọi transaction</span>
+<span class="kw">transaction.state.log.replication.factor</span>=<span class="nm">3</span>   <span class="cm"># min cho production</span>
+<span class="kw">transaction.state.log.min.isr</span>=<span class="nm">2</span>
+
+<span class="cm"># Offset log</span>
+<span class="kw">offsets.topic.replication.factor</span>=<span class="nm">3</span>
+<span class="kw">offsets.topic.num.partitions</span>=<span class="nm">50</span>
+
+<span class="cm"># Transaction timeout ceiling — producer's timeout phải &lt;= giá trị này</span>
+<span class="kw">transaction.max.timeout.ms</span>=<span class="nm">900000</span>           <span class="cm"># 15 phút</span>
+
+<span class="cm"># Giữ state của transactional.id đã hoàn thành 7 ngày</span>
+<span class="kw">transactional.id.expiration.ms</span>=<span class="nm">604800000</span>
+
+<span class="cm"># ISR lag tối đa trước khi replica bị đuổi khỏi ISR</span>
+<span class="kw">replica.lag.time.max.ms</span>=<span class="nm">30000</span></pre>
+  <div class="callout callout-info"><strong>Verify:</strong> <code>kafka-topics.sh --describe --topic __transaction_state</code> — đảm bảo ReplicationFactor=3 và ISR có đủ 3 brokers trước khi deploy.</div>
+</div>
+
+<!-- Panel 1: Topic setup -->
+<div class="panel" id="panel-1">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 1 — Setup</div>
+    <div class="panel-title">Topic setup</div>
+    <div class="panel-desc">Các topic data cũng cần <code>min.insync.replicas=2</code>. Nếu không, <code>acks=all</code> chỉ cần leader ghi là đủ — vô nghĩa với EOS.</div>
+  </div>
+  <pre><span class="cm"># Input topic</span>
+kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --create --topic <span class="st">payment-requests</span> \
+  --partitions <span class="nm">12</span> \
+  --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span> \
+  --config <span class="kw">retention.ms</span>=<span class="nm">604800000</span>   <span class="cm"># 7 ngày</span>
+
+<span class="cm"># Output topics</span>
+kafka-topics.sh --create --topic <span class="st">payment-processed</span> \
+  --partitions <span class="nm">12</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span>
+
+kafka-topics.sh --create --topic <span class="st">payment-failed</span> \
+  --partitions <span class="nm">12</span> --replication-factor <span class="nm">3</span> \
+  --config <span class="kw">min.insync.replicas</span>=<span class="nm">2</span>
+
+<span class="cm"># Dead letter queue</span>
+kafka-topics.sh --create --topic <span class="st">payment-dead-letter</span> \
+  --partitions <span class="nm">12</span> --replication-factor <span class="nm">3</span></pre>
+  <div class="callout callout-warning"><strong>Lưu ý:</strong> <code>min.insync.replicas</code> phải được set ở cả topic level. Broker-level default không đủ nếu topic được tạo trước khi thay đổi default.</div>
+</div>
+
+<!-- Panel 2: Dependencies -->
+<div class="panel" id="panel-2">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 1 — Setup</div>
+    <div class="panel-title">Dependencies</div>
+    <div class="panel-desc">Kafka client >= 2.5 để dùng consumer <code>groupMetadata()</code> — cần thiết cho <code>sendOffsetsToTransaction()</code> chính xác khi rebalance.</div>
+  </div>
+  <pre><span class="cm">// build.gradle.kts</span>
+<span class="kw">dependencies</span> {
+    implementation(<span class="st">"org.apache.kafka:kafka-clients:3.6.1"</span>)
+    implementation(<span class="st">"io.micrometer:micrometer-registry-prometheus:1.12.0"</span>)
+
+    <span class="cm">// Testing</span>
+    testImplementation(<span class="st">"org.testcontainers:kafka:1.19.3"</span>)
+    testImplementation(<span class="st">"org.awaitility:awaitility:4.2.0"</span>)
+}</pre>
+  <pre><span class="cm">&lt;!-- pom.xml --&gt;</span>
+&lt;<span class="kw">dependency</span>&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+    &lt;version&gt;<span class="nm">3.6.1</span>&lt;/version&gt;
+&lt;/<span class="kw">dependency</span>&gt;</pre>
+</div>
+
+<!-- Panel 3: Idempotent config -->
+<div class="panel" id="panel-3">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 2 — Producer</div>
+    <div class="panel-title">Idempotent producer config</div>
+    <div class="panel-desc"><code>enable.idempotence=true</code> tự động kéo theo <code>acks=all</code>, <code>retries=MAX_INT</code>, và giới hạn <code>max.in.flight=5</code>. Đây là nền tảng — transaction build trên idempotence.</div>
+  </div>
+  <pre><span class="kw">Properties</span> props = <span class="nm">new</span> Properties();
+
+<span class="cm">// === EOS bắt buộc ===</span>
+props.put(<span class="st">"enable.idempotence"</span>, <span class="nm">true</span>);
+<span class="cm">// Tự động set: acks=all, retries=MAX_INT, max.in.flight=5</span>
+
+props.put(<span class="st">"transactional.id"</span>, generateUniqueId());  <span class="cm">// xem bước tiếp</span>
+props.put(<span class="st">"transaction.timeout.ms"</span>, <span class="nm">60_000</span>);        <span class="cm">// 60s, &lt; broker max</span>
+
+<span class="cm">// === Performance (không ảnh hưởng EOS guarantee) ===</span>
+props.put(<span class="st">"batch.size"</span>, <span class="nm">65_536</span>);           <span class="cm">// 64KB batches</span>
+props.put(<span class="st">"linger.ms"</span>, <span class="nm">10</span>);               <span class="cm">// chờ 10ms để fill batch</span>
+props.put(<span class="st">"compression.type"</span>, <span class="st">"snappy"</span>);  <span class="cm">// giảm bandwidth</span>
+props.put(<span class="st">"delivery.timeout.ms"</span>, <span class="nm">120_000</span>);<span class="cm">// &gt; transaction.timeout.ms</span>
+
+props.put(<span class="st">"key.serializer"</span>, StringSerializer.<span class="nm">class</span>.getName());
+props.put(<span class="st">"value.serializer"</span>, StringSerializer.<span class="nm">class</span>.getName());</pre>
+  <table class="cfg-table">
+    <tr><th>Config</th><th>Value</th><th>Lý do</th></tr>
+    <tr><td>enable.idempotence</td><td>true</td><td>Bật PID + Sequence dedup tại broker</td></tr>
+    <tr><td>acks</td><td>all (auto)</td><td>Tất cả ISR phải xác nhận trước khi ACK</td></tr>
+    <tr><td>retries</td><td>MAX_INT (auto)</td><td>Retry vô hạn — idempotence handle duplicate</td></tr>
+    <tr><td>max.in.flight</td><td>5 (auto)</td><td>Giới hạn để đảm bảo ordering khi retry</td></tr>
+    <tr><td>transaction.timeout.ms</td><td>60000</td><td>Broker tự abort nếu không commit sau 60s</td></tr>
+  </table>
+</div>
+
+<!-- Panel 4: Transactional ID -->
+<div class="panel" id="panel-4">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 2 — Producer</div>
+    <div class="panel-title">Transactional ID — unique per instance</div>
+    <div class="panel-desc">Đây là lỗi phổ biến nhất. Hai instances cùng <code>transactional.id</code> sẽ fence lẫn nhau liên tục. Mỗi pod/instance phải có ID riêng biệt và ổn định trong suốt lifetime của nó.</div>
+  </div>
+  <pre><span class="kw">static</span> String generateTransactionalId(String servicePrefix) {
+    <span class="cm">// Ưu tiên dùng pod name (Kubernetes inject vào env)</span>
+    String podName = System.getenv(<span class="st">"POD_NAME"</span>);
+
+    <span class="kw">if</span> (podName != <span class="nm">null</span> && !podName.isEmpty()) {
+        <span class="cm">// payment-processor-pod-abc123-xyz</span>
+        <span class="kw">return</span> servicePrefix + <span class="st">"-"</span> + podName;
+    }
+
+    <span class="cm">// Fallback: hostname (VM/bare metal deployment)</span>
+    <span class="kw">try</span> {
+        String host = InetAddress.getLocalHost().getHostName();
+        <span class="kw">return</span> servicePrefix + <span class="st">"-"</span> + host;
+    } <span class="kw">catch</span> (UnknownHostException e) {
+        <span class="cm">// Last resort: UUID (mỗi restart sẽ tạo ID mới — OK nhưng</span>
+        <span class="cm">// transaction state cũ không bao giờ được claim lại)</span>
+        <span class="kw">return</span> servicePrefix + <span class="st">"-"</span> + UUID.randomUUID();
+    }
+}
+
+<span class="cm">// Kết quả ví dụ: "payment-processor-payment-pod-7d4f9b-xkp2q"</span></pre>
+  <div class="callout callout-danger"><strong>Không được:</strong> Dùng random UUID mới mỗi lần startup. Mỗi ID mới = coordinator gán Epoch mới = transaction state cũ bị bỏ. Quá nhiều ID bỏ xó sẽ làm <code>__transaction_state</code> phình to.</div>
+  <div class="callout callout-success"><strong>Tốt nhất:</strong> <code>POD_NAME</code> từ Kubernetes downward API — stable trong lifetime của pod, thay đổi khi pod được restart/reschedule.</div>
+</div>
+
+<!-- Panel 5: initTransactions -->
+<div class="panel" id="panel-5">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 2 — Producer</div>
+    <div class="panel-title">initTransactions() — gọi một lần khi startup</div>
+    <div class="panel-desc"><code>initTransactions()</code> làm 3 việc: tìm Transaction Coordinator, đăng ký PID + Epoch, và abort mọi transaction dở dang từ lần chạy trước. Phải gọi trước mọi <code>beginTransaction()</code>.</div>
+  </div>
+  <pre><span class="kw">public class</span> PaymentProcessor {
+
+    <span class="kw">private final</span> KafkaProducer&lt;String, String&gt; producer;
+    <span class="kw">private final</span> KafkaConsumer&lt;String, String&gt; consumer;
+
+    <span class="kw">public void</span> start() {
+        <span class="cm">// initTransactions() phải là bước ĐẦU TIÊN, trước subscribe()</span>
+        producer.initTransactions();
+        <span class="cm">// Lúc này: PID và Epoch đã được gán</span>
+        <span class="cm">// Mọi transaction dở dang từ trước đã bị abort bởi coordinator</span>
+
+        consumer.subscribe(List.of(<span class="st">"payment-requests"</span>));
+
+        <span class="cm">// Bắt đầu processing loop...</span>
+        <span class="kw">while</span> (running) {
+            processOneBatch();
+        }
+    }
+
+    <span class="cm">// initTransactions() sẽ throw nếu:</span>
+    <span class="cm">// - Coordinator không phản hồi → TimeoutException</span>
+    <span class="cm">// - Broker version cũ → UnsupportedVersionException</span>
+    <span class="cm">// - ACL không đủ → AuthorizationException</span>
+}</pre>
+  <div class="callout callout-warning"><strong>Timing:</strong> <code>initTransactions()</code> là blocking call. Nó chờ coordinator phản hồi. Set <code>max.block.ms</code> nếu cần timeout rõ ràng khi coordinator chậm.</div>
+</div>
+
+<!-- Panel 6: read_committed -->
+<div class="panel" id="panel-6">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 3 — Consumer</div>
+    <div class="panel-title">isolation.level = read_committed</div>
+    <div class="panel-desc">Đây là config consumer bị quên nhiều nhất. Nếu thiếu, consumer đọc cả messages của transactions chưa committed — kể cả messages sẽ bị ABORT. Toàn bộ EOS guarantee sụp đổ phía consumer.</div>
+  </div>
+  <pre><span class="kw">Properties</span> props = <span class="nm">new</span> Properties();
+
+<span class="cm">// === EOS bắt buộc ===</span>
+props.put(<span class="st">"isolation.level"</span>, <span class="st">"read_committed"</span>);
+<span class="cm">// Chỉ trả về messages của committed transactions</span>
+<span class="cm">// + non-transactional messages</span>
+<span class="cm">// Consumer blocked tại LSO (Last Stable Offset)</span>
+
+props.put(<span class="st">"enable.auto.commit"</span>, <span class="nm">false</span>);
+<span class="cm">// Auto-commit không biết về transaction boundaries</span>
+<span class="cm">// Dùng sendOffsetsToTransaction() thay thế</span>
+
+<span class="cm">// === Tuning ===</span>
+props.put(<span class="st">"max.poll.records"</span>, <span class="nm">500</span>);
+props.put(<span class="st">"max.poll.interval.ms"</span>, <span class="nm">300_000</span>);
+<span class="cm">// PHẢI &gt; thời gian xử lý 1 batch worst case</span>
+<span class="cm">// Nếu vượt quá → consumer bị evict → rebalance → reprocess</span>
+
+props.put(<span class="st">"session.timeout.ms"</span>, <span class="nm">30_000</span>);
+props.put(<span class="st">"heartbeat.interval.ms"</span>, <span class="nm">3_000</span>);
+<span class="cm">// heartbeat &lt; session.timeout / 3</span></pre>
+  <div class="callout callout-info"><strong>LSO:</strong> Consumer với <code>read_committed</code> không thể đọc vượt quá Last Stable Offset. Nếu có transaction sống lâu chưa commit, consumer bị "chặn" tại đó dù có messages mới hơn đã committed ở phía sau.</div>
+</div>
+
+<!-- Panel 7: Manual offset -->
+<div class="panel" id="panel-7">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 3 — Consumer</div>
+    <div class="panel-title">Manual offset — không dùng commitSync()</div>
+    <div class="panel-desc">Trong EOS flow, offset commit là một phần của transaction — không phải action riêng biệt. Dùng <code>sendOffsetsToTransaction()</code> thay vì <code>commitSync()</code>.</div>
+  </div>
+  <pre><span class="cm">// ❌ SAI — offset commit tách rời khỏi transaction</span>
+consumer.commitSync();  <span class="cm">// Nếu transaction sau đó abort, offset đã committed</span>
+                        <span class="cm">// → Consumer không reprocess → Data mất</span>
+
+<span class="cm">// ✅ ĐÚNG — offset commit nằm trong transaction</span>
+producer.sendOffsetsToTransaction(
+    buildOffsetMap(records),
+    consumer.groupMetadata()  <span class="cm">// Quan trọng: bao gồm generation ID</span>
+);
+<span class="cm">// Nếu transaction abort → offset không commit → consumer reprocess</span>
+<span class="cm">// Nếu transaction commit → offset commit cùng lúc → atomic!</span>
+
+<span class="cm">// Build offset map: partition → last_offset + 1</span>
+<span class="kw">private</span> Map&lt;TopicPartition, OffsetAndMetadata&gt; buildOffsetMap(
+        ConsumerRecords&lt;?, ?&gt; records) {
+    Map&lt;TopicPartition, OffsetAndMetadata&gt; map = <span class="nm">new</span> HashMap&lt;&gt;();
+    <span class="kw">for</span> (TopicPartition tp : records.partitions()) {
+        <span class="kw">var</span> recs = records.records(tp);
+        <span class="kw">long</span> last = recs.get(recs.size() - <span class="nm">1</span>).offset();
+        map.put(tp, <span class="nm">new</span> OffsetAndMetadata(last + <span class="nm">1</span>));
+    }
+    <span class="kw">return</span> map;
+}</pre>
+  <div class="callout callout-warning"><strong>groupMetadata() vs groupId string:</strong> Dùng <code>consumer.groupMetadata()</code> (không phải string groupId) để bao gồm generation ID. Nếu rebalance xảy ra trong lúc transaction đang chạy, coordinator phát hiện generation mismatch và reject offset commit — transaction bị abort, tránh double-processing.</div>
+</div>
+
+<!-- Panel 8: Business logic outside -->
+<div class="panel" id="panel-8">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 4 — Transaction loop</div>
+    <div class="panel-title">Business logic ngoài transaction window</div>
+    <div class="panel-desc">Nguyên tắc cốt lõi: transaction càng ngắn càng tốt. Chỉ đưa vào transaction những gì cần atomic — ghi outputs và commit offset. Business logic, validation, external calls đều làm trước.</div>
+  </div>
+  <pre><span class="kw">private void</span> processOneBatch() {
+    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(<span class="nm">500</span>));
+    <span class="kw">if</span> (records.isEmpty()) <span class="kw">return</span>;
+
+    <span class="cm">// ── NGOÀI TRANSACTION ──────────────────────────────────────────</span>
+    <span class="cm">// Bước 1: Deserialize (có thể fail → đưa vào DLQ)</span>
+    List&lt;PaymentRequest&gt; parsed = deserialize(records);
+
+    <span class="cm">// Bước 2: Business logic — tốn thời gian, gọi external service</span>
+    <span class="cm">// Đây có thể mất vài giây → OK vì chưa trong transaction</span>
+    List&lt;PaymentResult&gt; results = parsed.stream()
+        .map(<span class="kw">this</span>::validateAndProcess)   <span class="cm">// gọi account service, fraud check...</span>
+        .collect(toList());
+
+    <span class="cm">// ── TRONG TRANSACTION (ngắn, chỉ I/O Kafka) ────────────────────</span>
+    producer.beginTransaction();
+    <span class="kw">try</span> {
+        <span class="cm">// Bước 3: Ghi results</span>
+        <span class="cm">// Bước 4: Commit offset</span>
+        <span class="cm">// → xem các panel tiếp theo</span>
+        producer.commitTransaction();
+    } <span class="kw">catch</span> (KafkaException e) {
+        producer.abortTransaction();
+        <span class="kw">throw new</span> RetryableException(e);
+    }
+}</pre>
+  <div class="callout callout-success"><strong>Tại sao tách biệt?</strong> Transaction có <code>transaction.timeout.ms</code> = 60s. Nếu business logic mất 30s, chỉ còn 30s để ghi + commit. Tách ra: business logic bao lâu cũng được, transaction chỉ mất 10-50ms.</div>
+</div>
+
+<!-- Panel 9: beginTransaction -->
+<div class="panel" id="panel-9">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 4 — Transaction loop</div>
+    <div class="panel-title">beginTransaction()</div>
+    <div class="panel-desc">Bắt đầu transaction scope. Lúc này producer thông báo với Transaction Coordinator "tôi đang mở transaction". Coordinator ghi trạng thái ONGOING vào <code>__transaction_state</code>.</div>
+  </div>
+  <pre>producer.<span class="kw">beginTransaction</span>();
+<span class="cm">// Từ lúc này, mọi producer.send() đều thuộc transaction này</span>
+<span class="cm">// Coordinator biết: TxID=my-service-pod-abc → ONGOING</span>
+<span class="cm">// Các partitions sẽ được thêm vào danh sách khi send() đầu tiên</span>
+<span class="cm">// đến mỗi partition mới (AddPartitionsToTxn RPC)</span></pre>
+
+  <div class="section-title">Sequence diagram tại bước này</div>
+  <div class="diagram-wrap">
+    <div class="diagram-label">Producer → Coordinator handshake</div>
+    <svg viewBox="0 0 680 180" style="padding:16px">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+      <!-- actors -->
+      <rect x="30" y="16" width="130" height="36" rx="6" fill="var(--bg-info)" stroke="var(--bd-info)" stroke-width="0.5"/>
+      <text class="th" x="95" y="38" text-anchor="middle" dominant-baseline="central" fill="var(--tx-info)">Producer</text>
+      <rect x="460" y="16" width="180" height="36" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="550" y="38" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">Txn Coordinator</text>
+      <!-- lifelines -->
+      <line x1="95" y1="52" x2="95" y2="170" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="4 3"/>
+      <line x1="550" y1="52" x2="550" y2="170" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="4 3"/>
+      <!-- arrow 1 -->
+      <line x1="97" y1="90" x2="458" y2="90" stroke="var(--tx2)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="190" y="74" width="190" height="16" fill="var(--bg)"/>
+      <text class="ts" x="285" y="87" text-anchor="middle">beginTransaction() → RegisterTxn</text>
+      <!-- arrow 2 -->
+      <line x1="458" y1="120" x2="97" y2="120" stroke="var(--bd2)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+      <rect x="190" y="104" width="190" height="16" fill="var(--bg)"/>
+      <text class="ts" x="285" y="117" text-anchor="middle">← PID=12345, Epoch=3, status=ONGOING</text>
+    </svg>
+  </div>
+</div>
+
+<!-- Panel 10: send() outputs -->
+<div class="panel" id="panel-10">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 4 — Transaction loop</div>
+    <div class="panel-title">send() — ghi output messages</div>
+    <div class="panel-desc">Mỗi <code>send()</code> trong transaction window ghi message vào broker với trạng thái UNCOMMITTED. Consumer với <code>read_committed</code> không thấy những messages này cho đến khi transaction commit.</div>
+  </div>
+  <pre><span class="kw">for</span> (PaymentResult result : results) {
+    String topic = result.success()
+        ? <span class="st">"payment-processed"</span>
+        : <span class="st">"payment-failed"</span>;
+
+    producer.send(
+        <span class="nm">new</span> ProducerRecord&lt;&gt;(
+            topic,
+            result.requestId(),   <span class="cm">// key = requestId → ordering per payment</span>
+            toJson(result)        <span class="cm">// value = serialized result</span>
+        ),
+        (metadata, exception) -&gt; {
+            <span class="cm">// Callback chạy async — exception ở đây sẽ được</span>
+            <span class="cm">// re-thrown khi commitTransaction() được gọi</span>
+            <span class="kw">if</span> (exception != <span class="nm">null</span>) {
+                log.error(<span class="st">"Send failed: {}"</span>, exception.getMessage());
+            }
+        }
+    );
+    <span class="cm">// send() là non-blocking — return ngay lập tức</span>
+    <span class="cm">// Actual network I/O xảy ra trong background thread</span>
+}
+
+<span class="cm">// Tại thời điểm này trong partition log:</span>
+<span class="cm">// [BEGIN TxID=my-service-pod-abc]</span>
+<span class="cm">// [Message M1, PID=12345, Seq=0, UNCOMMITTED]</span>
+<span class="cm">// [Message M2, PID=12345, Seq=1, UNCOMMITTED]</span></pre>
+  <div class="callout callout-info"><strong>Dedup tự động:</strong> Nếu network timeout và producer retry, broker kiểm tra PID+Seq. Nếu đã có Seq=0 → drop duplicate silently, trả ACK như bình thường. Không cần code extra.</div>
+</div>
+
+<!-- Panel 11: sendOffsetsToTransaction -->
+<div class="panel" id="panel-11">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 4 — Transaction loop</div>
+    <div class="panel-title">sendOffsetsToTransaction() — atomic offset commit</div>
+    <div class="panel-desc">Trái tim của EOS. Ghi offset vào <code>__consumer_offsets</code> như một phần của transaction — không phải action riêng. Nếu transaction abort, offset cũng không commit.</div>
+  </div>
+  <pre>Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets = buildOffsetMap(records);
+
+producer.<span class="kw">sendOffsetsToTransaction</span>(
+    offsets,
+    consumer.<span class="kw">groupMetadata</span>()
+    <span class="cm">// groupMetadata() = {groupId, generationId, memberId}</span>
+    <span class="cm">// generationId phát hiện rebalance trong quá trình này</span>
+);
+
+<span class="cm">// Điều gì xảy ra bên dưới:</span>
+<span class="cm">// 1. Producer gửi TxnOffsetCommit request đến Group Coordinator</span>
+<span class="cm">// 2. Group Coordinator ghi offset vào __consumer_offsets</span>
+<span class="cm">//    với flag isTransactional=true</span>
+<span class="cm">// 3. Offset chỉ có hiệu lực khi transaction commit</span>
+<span class="cm">// 4. Nếu abort → offset bị rollback</span>
+
+<span class="cm">// Nếu rebalance xảy ra TRONG lúc này:</span>
+<span class="cm">// generationId trong groupMetadata() sẽ không match</span>
+<span class="cm">// → Group Coordinator reject → Exception → abort transaction</span>
+<span class="cm">// → Consumer mới sẽ reprocess từ last committed offset → OK</span></pre>
+  <div class="callout callout-success"><strong>Guarantee:</strong> Offset commit và message write là một atomic unit. Không bao giờ có tình trạng "message đã ghi ra output topic nhưng offset chưa commit" hoặc ngược lại.</div>
+</div>
+
+<!-- Panel 12: commitTransaction -->
+<div class="panel" id="panel-12">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 4 — Transaction loop</div>
+    <div class="panel-title">commitTransaction() — 2PC in action</div>
+    <div class="panel-desc">Một lời gọi đơn giản nhưng trigger cả giao thức 2-Phase Commit. Sau khi return, mọi messages và offset commits đều durable và visible với consumers.</div>
+  </div>
+  <pre>producer.<span class="kw">commitTransaction</span>();
+<span class="cm">// Đây là blocking call — chờ cho đến khi 2PC hoàn thành</span>
+
+<span class="cm">// Bên dưới, giao thức 2PC diễn ra:</span>
+<span class="cm">// Phase 1:</span>
+<span class="cm">//   Producer → Coordinator: EndTxn(COMMIT)</span>
+<span class="cm">//   Coordinator ghi PREPARE_COMMIT vào __transaction_state</span>
+<span class="cm">//   → Irrevocable: từ đây không thể abort</span>
+<span class="cm">//</span>
+<span class="cm">// Phase 2:</span>
+<span class="cm">//   Coordinator ghi COMMIT marker vào mỗi partition</span>
+<span class="cm">//   Coordinator ghi COMMIT marker vào __consumer_offsets</span>
+<span class="cm">//   Coordinator cập nhật __transaction_state: COMPLETE</span>
+<span class="cm">//   Coordinator trả về OK cho Producer</span>
+<span class="cm">//</span>
+<span class="cm">// Sau commit:</span>
+<span class="cm">//   Messages vượt qua LSO → consumer read_committed thấy được</span>
+<span class="cm">//   Offset có hiệu lực → consumer group sẽ không reprocess</span></pre>
+
+  <div class="flow-steps">
+    <div class="flow-step ok"><div class="flow-step-num">1</div><div class="flow-step-body"><div class="flow-step-title">EndTxn(COMMIT) → Coordinator</div><div class="flow-step-desc">Producer gửi intent commit</div></div></div>
+    <div class="flow-step ok"><div class="flow-step-num">2</div><div class="flow-step-body"><div class="flow-step-title">PREPARE_COMMIT ghi vào __transaction_state</div><div class="flow-step-desc">Durability checkpoint — coordinator crash cũng không mất</div></div></div>
+    <div class="flow-step ok"><div class="flow-step-num">3</div><div class="flow-step-body"><div class="flow-step-title">COMMIT marker ghi vào mỗi partition</div><div class="flow-step-desc">Messages chuyển từ UNCOMMITTED → COMMITTED</div></div></div>
+    <div class="flow-step ok"><div class="flow-step-num">4</div><div class="flow-step-body"><div class="flow-step-title">COMMIT marker ghi vào __consumer_offsets</div><div class="flow-step-desc">Offset chính thức có hiệu lực</div></div></div>
+    <div class="flow-step ok"><div class="flow-step-num">5</div><div class="flow-step-body"><div class="flow-step-title">Consumer thấy messages (LSO advance)</div><div class="flow-step-desc">read_committed consumer nhận batch</div></div></div>
+  </div>
+</div>
+
+<!-- Panel 13: ProducerFencedException -->
+<div class="panel" id="panel-13">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 5 — Error handling</div>
+    <div class="panel-title">ProducerFencedException — fatal, shutdown ngay</div>
+    <div class="panel-desc">Xảy ra khi producer khác đã claim cùng <code>transactional.id</code> với Epoch cao hơn. Instance hiện tại là "zombie" — không có quyền ghi bất cứ thứ gì. Phải shutdown ngay lập tức.</div>
+  </div>
+  <pre><span class="kw">try</span> {
+    producer.beginTransaction();
+    <span class="cm">// ... send, sendOffsets ...</span>
+    producer.commitTransaction();
+
+} <span class="kw">catch</span> (<span class="er">ProducerFencedException</span> | <span class="er">InvalidProducerEpochException</span> e) {
+    <span class="cm">// ZOMBIE FENCING:</span>
+    <span class="cm">// Epoch của mình (3) &lt; current epoch (4)</span>
+    <span class="cm">// Instance khác đã restart với cùng transactional.id</span>
+    <span class="cm">// và được gán Epoch mới = 4</span>
+
+    log.error(<span class="st">"[FATAL] Producer fenced! transactional.id={}, "</span>
+            + <span class="st">"This is a zombie instance. Shutting down."</span>,
+              transactionalId, e);
+
+    <span class="cm">// KHÔNG được gọi abortTransaction() — không còn quyền</span>
+    <span class="cm">// KHÔNG được retry — sẽ tiếp tục bị fence</span>
+
+    producer.close();              <span class="cm">// đóng producer</span>
+    <span class="kw">throw new</span> FatalException(e);  <span class="cm">// để caller shutdown service</span>
+
+} <span class="kw">catch</span> (<span class="er">AuthorizationException</span> e) {
+    <span class="cm">// ACL issue — cũng fatal, không retry</span>
+    producer.close();
+    <span class="kw">throw new</span> FatalException(e);
+}</pre>
+  <div class="callout callout-danger"><strong>Zombie Fencing là feature, không phải bug.</strong> Nếu deployment cũ và mới chạy song song với cùng transactional.id, Kafka tự động đảm bảo chỉ có một instance "thắng". Instance cũ buộc phải dừng.</div>
+</div>
+
+<!-- Panel 14: KafkaException + abort -->
+<div class="panel" id="panel-14">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 5 — Error handling</div>
+    <div class="panel-title">KafkaException — abort và retry</div>
+    <div class="panel-desc">Lỗi có thể retry được (network timeout, broker không sẵn sàng tạm thời). Abort transaction hiện tại, reset consumer về last committed offset, và retry batch trong lần poll tiếp theo.</div>
+  </div>
+  <pre><span class="kw">try</span> {
+    producer.beginTransaction();
+    <span class="cm">// ... send, sendOffsets ...</span>
+    producer.commitTransaction();
+    retryHandler.recordSuccess();
+
+} <span class="kw">catch</span> (<span class="er">ProducerFencedException</span> e) {
+    <span class="cm">// Fatal — xem panel trước</span>
+    <span class="kw">throw</span> ...;
+
+} <span class="kw">catch</span> (<span class="er">KafkaException</span> e) {
+    <span class="cm">// Retryable — abort và thử lại</span>
+    log.warn(<span class="st">"Transaction failed, aborting. Retry next poll."</span>, e);
+
+    <span class="kw">try</span> {
+        producer.<span class="kw">abortTransaction</span>();
+        <span class="cm">// Coordinator nhận ABORT → ghi ABORT marker vào partitions</span>
+        <span class="cm">// Messages đã send() bị ẩn khỏi consumers</span>
+    } <span class="kw">catch</span> (KafkaException abortEx) {
+        <span class="cm">// abort() cũng fail → state không rõ → shutdown an toàn</span>
+        log.error(<span class="st">"abortTransaction() also failed"</span>, abortEx);
+        producer.close();
+        <span class="kw">throw new</span> FatalException(abortEx);
+    }
+
+    <span class="cm">// Reset consumer về last committed offset</span>
+    resetToLastCommitted();
+
+    <span class="cm">// Exponential backoff</span>
+    retryHandler.handleRetryableFailure(e);
+    <span class="cm">// → sleep 2s, 4s, 8s... tối đa 5 lần rồi fatal</span>
+}</pre>
+  <pre><span class="kw">private void</span> resetToLastCommitted() {
+    <span class="kw">for</span> (TopicPartition tp : consumer.assignment()) {
+        OffsetAndMetadata committed = consumer
+            .committed(Set.of(tp)).get(tp);
+        <span class="kw">if</span> (committed != <span class="nm">null</span>) {
+            consumer.seek(tp, committed.offset());
+        } <span class="kw">else</span> {
+            consumer.seekToBeginning(Set.of(tp));
+        }
+    }
+}</pre>
+</div>
+
+<!-- Panel 15: DLQ -->
+<div class="panel" id="panel-15">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 5 — Error handling</div>
+    <div class="panel-title">Dead Letter Queue — trong transaction</div>
+    <div class="panel-desc">Messages không thể xử lý (deserialize fail, validation fail không thể retry) phải được ghi vào DLQ <em>trong cùng transaction</em>. Nếu ghi DLQ ngoài transaction, có thể DLQ ghi thành công nhưng offset không commit → message xuất hiện ở DLQ hai lần.</div>
+  </div>
+  <pre>producer.beginTransaction();
+<span class="kw">try</span> {
+    <span class="kw">for</span> (ConsumerRecord&lt;?, ?&gt; record : records) {
+        <span class="kw">try</span> {
+            PaymentRequest req = deserialize(record.value());
+            PaymentResult result = process(req);
+
+            producer.send(<span class="nm">new</span> ProducerRecord&lt;&gt;(
+                result.ok() ? <span class="st">"payment-processed"</span> : <span class="st">"payment-failed"</span>,
+                req.id(), toJson(result)
+            ));
+
+        } <span class="kw">catch</span> (DeserializeException | ValidationException e) {
+            <span class="cm">// Message không xử lý được → DLQ trong transaction</span>
+            Headers headers = buildDlqHeaders(record, e);
+            producer.send(<span class="nm">new</span> ProducerRecord&lt;&gt;(
+                <span class="st">"payment-dead-letter"</span>,
+                <span class="nm">null</span>,           <span class="cm">// partition = null</span>
+                record.key(),
+                record.value(), <span class="cm">// raw value để debug</span>
+                headers
+            ));
+            <span class="cm">// Không throw — tiếp tục xử lý records khác trong batch</span>
+        }
+    }
+
+    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+    producer.commitTransaction();
+    <span class="cm">// Atomic: output + DLQ + offset → tất cả hoặc không có gì</span>
+
+} <span class="kw">catch</span> (KafkaException e) { ... }</pre>
+  <div class="callout callout-info"><strong>DLQ headers quan trọng:</strong> Thêm <code>dlq-reason</code>, <code>dlq-original-topic</code>, <code>dlq-original-partition</code>, <code>dlq-original-offset</code>, <code>dlq-timestamp</code> để team ops có thể trace và replay sau.</div>
+</div>
+
+<!-- Panel 16: Kubernetes -->
+<div class="panel" id="panel-16">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 6 — Production</div>
+    <div class="panel-title">Kubernetes deployment — unique ID per pod</div>
+    <div class="panel-desc">Rolling deployment phải đảm bảo pod cũ shutdown hoàn toàn trước khi pod mới nhận traffic. Nếu không, hai pods cùng <code>transactional.id</code> chạy song song → fence liên tục.</div>
+  </div>
+  <pre><span class="kw">spec</span>:
+  replicas: <span class="nm">3</span>
+  strategy:
+    type: <span class="st">RollingUpdate</span>
+    rollingUpdate:
+      maxSurge: <span class="nm">1</span>        <span class="cm"># tối đa 1 pod mới trước khi terminate pod cũ</span>
+      maxUnavailable: <span class="nm">0</span>  <span class="cm"># không terminate cũ trước khi mới ready</span>
+
+  template:
+    spec:
+      containers:
+      - name: payment-processor
+        env:
+        - name: <span class="kw">POD_NAME</span>
+          valueFrom:
+            fieldRef:
+              fieldPath: <span class="st">metadata.name</span>  <span class="cm"># inject pod name</span>
+
+        resources:
+          limits:
+            memory: <span class="st">"1Gi"</span>   <span class="cm"># OOM → crash → zombie risk nếu quá thấp</span>
+            cpu: <span class="st">"1000m"</span>
+
+        livenessProbe:
+          httpGet: { path: <span class="st">/health/live</span>, port: <span class="nm">8080</span> }
+          initialDelaySeconds: <span class="nm">30</span>
+          failureThreshold: <span class="nm">3</span>
+
+        lifecycle:
+          preStop:
+            exec:
+              command: [<span class="st">"/bin/sh"</span>, <span class="st">"-c"</span>, <span class="st">"sleep 15"</span>]
+              <span class="cm"># Đủ thời gian hoàn thành transaction hiện tại</span>
+
+      terminationGracePeriodSeconds: <span class="nm">60</span>
+      <span class="cm"># &gt; transaction.timeout.ms để không bị kill giữa chừng</span></pre>
+</div>
+
+<!-- Panel 17: Monitoring -->
+<div class="panel" id="panel-17">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 6 — Production</div>
+    <div class="panel-title">Monitoring checklist</div>
+    <div class="panel-desc">EOS không có nghĩa là không cần monitor. Các metrics sau báo hiệu hệ thống đang hoạt động đúng hay không.</div>
+  </div>
+
+  <div class="section-title">Metrics cần alert</div>
+  <table class="cfg-table">
+    <tr><th>Metric</th><th>Threshold</th><th>Ý nghĩa khi vượt</th></tr>
+    <tr><td>kafka_transactions_aborted / committed</td><td>&gt; 5%</td><td>Network vấn đề hoặc business logic timeout thường xuyên</td></tr>
+    <tr><td>kafka_consumer_group_lag</td><td>tăng liên tục 10 phút</td><td>Processing không kịp throughput, cần scale</td></tr>
+    <tr><td>kafka_producer_fenced_total</td><td>&gt; 0</td><td>Zombie instance — kiểm tra deployment ngay</td></tr>
+    <tr><td>kafka_messages_dlq_total</td><td>&gt; 0</td><td>Data cần review thủ công</td></tr>
+    <tr><td>kafka_transaction_duration p99</td><td>&gt; 5s</td><td>Transaction quá lâu, sắp timeout</td></tr>
+  </table>
+
+  <div class="section-title">Pre-production checklist</div>
+  <ul class="checklist">
+    <li>Broker: transaction.state.log.replication.factor = 3</li>
+    <li>Broker: transaction.state.log.min.isr = 2</li>
+    <li>Broker: offsets.topic.replication.factor = 3</li>
+    <li>Topics: min.insync.replicas = 2</li>
+    <li>Producer: enable.idempotence = true</li>
+    <li>Producer: transactional.id = unique per instance</li>
+    <li>Producer: transaction.timeout.ms &lt; broker max</li>
+    <li>Producer: initTransactions() gọi trước subscribe()</li>
+    <li>Consumer: isolation.level = read_committed</li>
+    <li>Consumer: enable.auto.commit = false</li>
+    <li>Consumer: max.poll.interval.ms &gt; worst-case batch processing time</li>
+    <li>Code: sendOffsetsToTransaction() thay vì commitSync()</li>
+    <li>Code: ProducerFencedException → shutdown, không retry</li>
+    <li>Code: KafkaException → abortTransaction() → resetToLastCommitted()</li>
+    <li>Code: DLQ write nằm trong transaction</li>
+    <li class="warn">Test: producer crash mid-transaction → không có partial data</li>
+    <li class="warn">Test: broker crash → idempotent retry không duplicate</li>
+    <li class="warn">Test: consumer với read_committed không thấy aborted messages</li>
+  </ul>
+</div>
+
+<!-- Panel 18: Full flow diagram -->
+<div class="panel" id="panel-18">
+  <div class="panel-header">
+    <div class="panel-phase">Phase 6 — Production</div>
+    <div class="panel-title">Full EOS flow diagram</div>
+    <div class="panel-desc">Toàn bộ flow Exactly-Once từ input topic đến consumer đọc output — với các điểm failure và recovery.</div>
+  </div>
+
+  <div class="diagram-wrap">
+    <div class="diagram-label">Exactly-Once Semantics — complete flow (một batch cycle)</div>
+    <svg viewBox="0 0 680 720" style="padding:16px 8px">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- Input topic -->
+      <rect x="220" y="10" width="240" height="40" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="340" y="34" text-anchor="middle" dominant-baseline="central">payment-requests topic</text>
+
+      <!-- Arrow down to poll -->
+      <line x1="340" y1="50" x2="340" y2="80" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <!-- consumer.poll() -->
+      <rect x="200" y="80" width="280" height="40" rx="8" fill="var(--bg-info)" stroke="var(--bd-info)" stroke-width="0.5"/>
+      <text class="th" x="340" y="104" text-anchor="middle" dominant-baseline="central" fill="var(--tx-info)">consumer.poll() — isolation=read_committed</text>
+
+      <!-- Arrow to business logic -->
+      <line x1="340" y1="120" x2="340" y2="160" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <text class="ts" x="355" y="143" fill="var(--tx3)">records</text>
+
+      <!-- Business logic box (outside txn) -->
+      <rect x="30" y="160" width="620" height="80" rx="8" fill="var(--bg2)" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="4 3"/>
+      <text class="ts" x="46" y="178" fill="var(--tx3)">Ngoài transaction</text>
+      <rect x="60" y="182" width="160" height="40" rx="6" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="140" y="206" text-anchor="middle" dominant-baseline="central">Deserialize</text>
+      <line x1="220" y1="202" x2="258" y2="202" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <rect x="260" y="182" width="180" height="40" rx="6" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="350" y="198" text-anchor="middle" dominant-baseline="central">Business logic</text>
+      <text class="ts" x="350" y="214" text-anchor="middle" dominant-baseline="central">validate, process, enrich</text>
+      <line x1="440" y1="202" x2="478" y2="202" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <rect x="480" y="182" width="140" height="40" rx="6" fill="var(--bg)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="550" y="198" text-anchor="middle" dominant-baseline="central">Results ready</text>
+      <text class="ts" x="550" y="214" text-anchor="middle" dominant-baseline="central">no Kafka I/O yet</text>
+
+      <!-- Arrow to transaction block -->
+      <line x1="340" y1="240" x2="340" y2="276" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <!-- Transaction block -->
+      <rect x="30" y="276" width="620" height="260" rx="8" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5" stroke-dasharray="4 3" opacity="0.6"/>
+      <rect x="30" y="276" width="620" height="260" rx="8" fill="none" stroke="var(--bd-success)" stroke-width="1"/>
+      <text class="ts" x="46" y="294" fill="var(--tx-success)">Transaction window (short, Kafka I/O only)</text>
+
+      <!-- beginTransaction -->
+      <rect x="220" y="300" width="240" height="36" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="340" y="322" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">beginTransaction()</text>
+
+      <line x1="340" y1="336" x2="340" y2="360" stroke="#3b6d11" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <!-- send outputs row -->
+      <rect x="60" y="360" width="180" height="40" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="150" y="376" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">send() to output</text>
+      <text class="ts" x="150" y="392" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">payment-processed/failed</text>
+
+      <rect x="260" y="360" width="160" height="40" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="340" y="376" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">send() to DLQ</text>
+      <text class="ts" x="340" y="392" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">if deserialize fails</text>
+
+      <!-- Arrow from beginTransaction to both boxes -->
+      <path d="M 340 336 L 340 350 L 150 350 L 150 360" fill="none" stroke="#3b6d11" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M 340 350 L 340 360" fill="none" stroke="#3b6d11" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <line x1="340" y1="400" x2="340" y2="426" stroke="#3b6d11" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M 150 400 L 150 414 L 340 414 L 340 426" fill="none" stroke="#3b6d11" stroke-width="1.5"/>
+
+      <!-- sendOffsetsToTransaction -->
+      <rect x="170" y="426" width="340" height="36" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="340" y="444" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">sendOffsetsToTransaction(offsets, groupMetadata)</text>
+
+      <line x1="340" y1="462" x2="340" y2="488" stroke="#3b6d11" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <!-- commitTransaction -->
+      <rect x="200" y="488" width="280" height="36" rx="6" fill="var(--bg-success)" stroke="var(--bd-success)" stroke-width="0.5"/>
+      <text class="th" x="340" y="510" text-anchor="middle" dominant-baseline="central" fill="var(--tx-success)">commitTransaction() — 2PC</text>
+
+      <!-- Arrow out of transaction block -->
+      <line x1="340" y1="536" x2="340" y2="570" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <text class="ts" x="355" y="556" fill="var(--tx3)">COMMIT markers</text>
+
+      <!-- Output topics + offset commit side by side -->
+      <rect x="60" y="570" width="200" height="40" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="160" y="594" text-anchor="middle" dominant-baseline="central">output topics visible</text>
+
+      <rect x="280" y="570" width="200" height="40" rx="8" fill="var(--bg2)" stroke="var(--bd2)" stroke-width="0.5"/>
+      <text class="th" x="380" y="586" text-anchor="middle" dominant-baseline="central">offset committed</text>
+      <text class="ts" x="380" y="602" text-anchor="middle" dominant-baseline="central">in __consumer_offsets</text>
+
+      <path d="M 340 536 L 340 554 L 160 554 L 160 570" fill="none" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <path d="M 340 554 L 380 554 L 380 570" fill="none" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+      <!-- Downstream consumer -->
+      <line x1="160" y1="610" x2="160" y2="648" stroke="var(--bd2)" stroke-width="1.5" marker-end="url(#ar2)"/>
+      <rect x="60" y="648" width="560" height="40" rx="8" fill="var(--bg-info)" stroke="var(--bd-info)" stroke-width="0.5"/>
+      <text class="th" x="340" y="672" text-anchor="middle" dominant-baseline="central" fill="var(--tx-info)">Downstream consumer reads — exactly once, no duplicates</text>
+
+      <!-- Error path: abort -->
+      <rect x="490" y="370" width="150" height="50" rx="6" fill="var(--bg-danger)" stroke="var(--bd-danger)" stroke-width="0.5"/>
+      <text class="th" x="565" y="388" text-anchor="middle" dominant-baseline="central" fill="var(--tx-danger)">KafkaException</text>
+      <text class="ts" x="565" y="404" text-anchor="middle" dominant-baseline="central" fill="var(--tx-danger)">abortTransaction()</text>
+
+      <rect x="490" y="440" width="150" height="40" rx="6" fill="var(--bg-danger)" stroke="var(--bd-danger)" stroke-width="0.5"/>
+      <text class="th" x="565" y="464" text-anchor="middle" dominant-baseline="central" fill="var(--tx-danger)">seek() to last offset</text>
+
+      <path d="M 480 390 L 490 390" fill="none" stroke="var(--tx-danger)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+      <line x1="565" y1="420" x2="565" y2="440" stroke="var(--tx-danger)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+      <path d="M 565 480 L 565 494 L 640 494 L 640 140 L 340 140" fill="none" stroke="var(--tx-danger)" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+      <text class="ts" x="636" y="310" text-anchor="end" fill="var(--tx-danger)">retry</text>
+    </svg>
+  </div>
+</div>
+
+<!-- Navigation buttons -->
+<div class="nav-footer">
+  <button id="btn-prev" onclick="go(-1)" disabled>← Trước</button>
+  <button id="btn-next" class="btn-primary" onclick="go(1)">Tiếp →</button>
+  <span style="margin-left:auto;font-size:12px;color:var(--tx3)" id="counter">1 / 19</span>
+</div>
+
+</main>
+</div>
+
+<script>
+const TOTAL = 19;
+let cur = 0;
+
+function goTo(i) {
+  document.getElementById('panel-' + cur).classList.remove('active');
+  document.getElementById('nav-' + cur).classList.remove('active');
+  document.getElementById('nav-' + cur).classList.add('done');
+  cur = i;
+  document.getElementById('panel-' + cur).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach((el, idx) => {
+    el.classList.remove('active');
+    if (idx === cur) el.classList.add('active');
+  });
+  document.getElementById('prog').style.width = Math.round((cur + 1) / TOTAL * 100) + '%';
+  document.getElementById('counter').textContent = (cur + 1) + ' / ' + TOTAL;
+  document.getElementById('btn-prev').disabled = cur === 0;
+  document.getElementById('btn-next').disabled = cur === TOTAL - 1;
+  document.getElementById('btn-next').textContent = cur === TOTAL - 1 ? 'Hoàn thành' : 'Tiếp →';
+  document.querySelector('.main').scrollTop = 0;
+}
+
+function go(dir) {
+  const next = cur + dir;
+  if (next >= 0 && next < TOTAL) goTo(next);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+</script>
+</body>
+</html>

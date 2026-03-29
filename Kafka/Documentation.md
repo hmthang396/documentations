@@ -2,8 +2,136 @@
 
 ## Table of Contents
 
-- [1.1 Kafka Architecture (Brokers, Topics, Partitions, Leaders & Followers, Replication & ISR)](#11-kafka-architecture-brokers-topics-partitions-leaders--followers-replication--isr)
-- [Key mental model](#key-mental-model)
+- [1. Kafka Core Foundations](#1-kafka-core-foundations)
+  - [1.1 Kafka Architecture (Brokers, Topics, Partitions, Leaders & Followers, Replication & ISR)](#11-kafka-architecture-brokers-topics-partitions-leaders-followers-replication-isr)
+    - [1.1.1 **Broker**](#111-broker)
+    - [1.1.2 **Producer**](#112-producer)
+      - [Phía Producer Client (các bước 1–9)](#pha-producer-client-cc-bc-19)
+      - [Phía Broker – Leader (các bước 10–18)](#pha-broker-leader-cc-bc-1018)
+    - [1.1.3 **Consumer**](#113-consumer)
+      - [Fan-out Architecture](#fan-out-architecture)
+      - [Consumer Backpressure Architecture](#consumer-backpressure-architecture)
+    - [1.1.4 **Topics**](#114-topics)
+    - [1.2.2 Deep Dive Internals](#122-deep-dive-internals)
+    - [1.2.3 Production Story / Real Failure Case](#123-production-story-real-failure-case)
+    - [1.2.4 Best Practices + Common Mistakes](#124-best-practices-common-mistakes)
+    - [1.2.5 System Design / Interview Perspective](#125-system-design-interview-perspective)
+    - [1.2.6 Q&A](#126-qa)
+  - [1.2 Producer Internals (Batching, linger.ms, compression, Idempotent Producer, Transactions)](#12-producer-internals-batching-lingerms-compression-idempotent-producer-transactions)
+    - [1.2.1 Concept Explanation](#121-concept-explanation)
+    - [1.2.2 Deep Dive Internals](#122-deep-dive-internals)
+    - [1.2.3 Production Story / Real Failure Case](#123-production-story-real-failure-case)
+    - [1.2.4. Best Practices + Common Mistakes](#124-best-practices-common-mistakes)
+    - [1.2.5. System Design / Interview Perspective](#125-system-design-interview-perspective)
+    - [1.2.6. Follow-up Questions](#126-follow-up-questions)
+    - [1.2.7. Idempotent Producer](#127-idempotent-producer)
+      - [Vấn đề cần giải quyết](#vn-cn-gii-quyt)
+      - [Cơ chế: Producer ID (PID) + Sequence Number](#c-ch-producer-id-pid-sequence-number)
+      - [Kích hoạt Idempotent Producer](#kch-hot-idempotent-producer)
+      - [Giới hạn của Idempotent Producer](#gii-hn-ca-idempotent-producer)
+    - [1.2.8. Transactions — Atomic Writes across Partitions](#128-transactions-atomic-writes-across-partitions)
+      - [Vấn đề cần giải quyết](#vn-cn-gii-quyt)
+      - [Kiến trúc: Transaction Coordinator](#kin-trc-transaction-coordinator)
+      - [Giao thức 2-Phase Commit (2PC) của Kafka](#giao-thc-2-phase-commit-2pc-ca-kafka)
+      - [Implementation](#implementation)
+      - [Zombie Fencing — Tại sao cần Epoch?](#zombie-fencing-ti-sao-cn-epoch)
+    - [1.2.9. Consumer-side Exactly-Once](#129-consumer-side-exactly-once)
+      - [Isolation Level: read_committed vs read_uncommitted](#isolation-level-readcommitted-vs-readuncommitted)
+      - [Cơ chế hoạt động của read_committed](#c-ch-hot-ng-ca-readcommitted)
+      - [Transaction Mark trong Log](#transaction-mark-trong-log)
+    - [1.2.10. End-to-End Exactly-Once Architecture](#1210-end-to-end-exactly-once-architecture)
+      - [Pattern: Consume-Transform-Produce](#pattern-consume-transform-produce)
+      - [Kafka Streams (built-in E2E EOS)](#kafka-streams-built-in-e2e-eos)
+      - [EXACTLY_ONCE_V2 vs EXACTLY_ONCE (legacy)](#exactlyoncev2-vs-exactlyonce-legacy)
+    - [1.2.11. Failure Scenarios & Recovery](#1211-failure-scenarios-recovery)
+      - [Scenario 1: Producer crash giữa transaction](#scenario-1-producer-crash-gia-transaction)
+      - [Scenario 2: Coordinator crash](#scenario-2-coordinator-crash)
+      - [Scenario 3: Broker crash (partition leader failure)](#scenario-3-broker-crash-partition-leader-failure)
+      - [Scenario 4: Consumer rebalance giữa transaction](#scenario-4-consumer-rebalance-gia-transaction)
+  - [1.3 Consumer Internals (Consumer Groups, Group Coordinator, Rebalancing strategies, Offset management)](#13-consumer-internals-consumer-groups-group-coordinator-rebalancing-strategies-offset-management)
+    - [1.3.1 Concept Explanation](#131-concept-explanation)
+    - [1.3.2 Deep Dive Internals](#132-deep-dive-internals)
+    - [1.3.3 Production Story / Real Failure Case](#133-production-story-real-failure-case)
+    - [1.3.4 Best Practices + Common Mistakes](#134-best-practices-common-mistakes)
+    - [1.3.5 System Design / Interview Perspective](#135-system-design-interview-perspective)
+    - [1.3.6 Follow-up Questions](#136-follow-up-questions)
+  - [1.4 Delivery Semantics (At-most-once, At-least-once, Exactly-once)](#14-delivery-semantics-at-most-once-at-least-once-exactly-once)
+    - [Tại sao delivery semantics quan trọng?](#ti-sao-delivery-semantics-quan-trng)
+    - [Ba mức độ đảm bảo](#ba-mc-m-bo)
+    - [Anatomy của một Message Journey](#anatomy-ca-mt-message-journey)
+    - [1.4.1 At-Most-Once (≤1)](#141-at-most-once-1)
+      - [Nguyên tắc](#nguyn-tc)
+      - [Cơ chế hoạt động](#c-ch-hot-ng)
+      - [Failure analysis](#failure-analysis)
+      - [Khi nào dùng At-Most-Once?](#khi-no-dng-at-most-once)
+    - [1.4.2 At-Least-Once (≥1)](#142-at-least-once-1)
+      - [Nguyên tắc](#nguyn-tc)
+      - [Cơ chế hoạt động](#c-ch-hot-ng)
+      - [Failure analysis — Tại sao duplicate xảy ra?](#failure-analysis-ti-sao-duplicate-xy-ra)
+      - [Idempotency là giải pháp phía consumer](#idempotency-l-gii-php-pha-consumer)
+      - [Khi nào dùng At-Least-Once?](#khi-no-dng-at-least-once)
+    - [1.4.3 Exactly-Once (=1)](#143-exactly-once-1)
+      - [Nguyên tắc](#nguyn-tc)
+      - [Đây là vấn đề khó nhất trong distributed systems](#y-l-vn-kh-nht-trong-distributed-systems)
+    - [1.4.4. Performance Trade-offs](#144-performance-trade-offs)
+      - [Throughput comparison (approximate, production-scale)](#throughput-comparison-approximate-production-scale)
+      - [Overhead của Transactions](#overhead-ca-transactions)
+      - [Kafka Streams throughput tuning](#kafka-streams-throughput-tuning)
+    - [1.4.5. Decision Framework cho Staff Engineer](#145-decision-framework-cho-staff-engineer)
+      - [Decision tree](#decision-tree)
+      - [Outbox Pattern cho Cross-System EOS](#outbox-pattern-cho-cross-system-eos)
+    - [1.4.6 Follow-up Questions](#146-follow-up-questions)
+    - [1.4.7 Mini Exercise](#147-mini-exercise)
+- [2. Production Engineering & Operations](#2-production-engineering-operations)
+  - [2.1 Partition scaling trade-offs](#21-partition-scaling-trade-offs)
+    - [2.1.1 Concept Explanation (Clear Senior-Level Understanding)](#211-concept-explanation-clear-senior-level-understanding)
+    - [2.1.2 Deep Dive Internals (Staff-Level Depth)](#212-deep-dive-internals-staff-level-depth)
+    - [2.1.3 Production Story / Real Failure Case](#213-production-story-real-failure-case)
+    - [2.1.4 Best Practices + Common Mistakes](#214-best-practices-common-mistakes)
+    - [2.1.5 System Design / Interview Perspective](#215-system-design-interview-perspective)
+    - [2.1.6 Follow-up Questions to Challenge My Thinking](#216-follow-up-questions-to-challenge-my-thinking)
+    - [2.1.7 Mini Exercise or Practical Task](#217-mini-exercise-or-practical-task)
+  - [2.2 Consumer Lag & Performance Tuning](#22-consumer-lag-performance-tuning)
+    - [2.2.1 Concept Explanation (Clear Senior-Level Understanding)](#221-concept-explanation-clear-senior-level-understanding)
+    - [2.2.2 Deep Dive Internals (Staff-Level Depth)](#222-deep-dive-internals-staff-level-depth)
+    - [2.2.3 Production Story / Real Failure Case](#223-production-story-real-failure-case)
+    - [2.2.4 Best Practices + Common Mistakes](#224-best-practices-common-mistakes)
+    - [2.2.5 System Design / Interview Perspective](#225-system-design-interview-perspective)
+    - [2.2.6 Follow-up Questions to Challenge My Thinking](#226-follow-up-questions-to-challenge-my-thinking)
+    - [2.2.7 Mini Exercise or Practical Task](#227-mini-exercise-or-practical-task)
+  - [2.3 Broker Failures & Recovery](#23-broker-failures-recovery)
+    - [2.3.1 Concept Explanation (Clear Senior-Level Understanding)](#231-concept-explanation-clear-senior-level-understanding)
+    - [2.3.2 Deep Dive Internals (Staff-Level Depth)](#232-deep-dive-internals-staff-level-depth)
+    - [2.3.3 Production Story / Real Failure Case](#233-production-story-real-failure-case)
+    - [2.3.4 Best Practices + Common Mistakes](#234-best-practices-common-mistakes)
+    - [2.3.5 System Design / Interview Perspective](#235-system-design-interview-perspective)
+    - [2.3.6 Follow-up Questions to Challenge My Thinking](#236-follow-up-questions-to-challenge-my-thinking)
+    - [2.3.7 Mini Exercise or Practical Task](#237-mini-exercise-or-practical-task)
+  - [2.4 Leader Election Scenarios](#24-leader-election-scenarios)
+    - [2.4.1 Concept Explanation (Clear Senior-Level Understanding)](#241-concept-explanation-clear-senior-level-understanding)
+    - [2.4.2 Deep Dive Internals (Staff-Level Depth)](#242-deep-dive-internals-staff-level-depth)
+    - [2.4.3 Production Story / Real Failure Case](#243-production-story-real-failure-case)
+    - [2.4.4 Best Practices + Common Mistakes](#244-best-practices-common-mistakes)
+    - [2.4.5 System Design / Interview Perspective](#245-system-design-interview-perspective)
+    - [2.4.6 Follow-up Questions to Challenge My Thinking](#246-follow-up-questions-to-challenge-my-thinking)
+    - [2.4.7 Mini Exercise or Practical Task](#247-mini-exercise-or-practical-task)
+  - [2.5 Retention Policies (Time vs Size)](#25-retention-policies-time-vs-size)
+    - [2.5.1 Concept Explanation (Clear Senior-Level Understanding)](#251-concept-explanation-clear-senior-level-understanding)
+    - [2.5.2 Deep Dive Internals (Staff-Level Depth)](#252-deep-dive-internals-staff-level-depth)
+    - [2.5.3 Production Story / Real Failure Case](#253-production-story-real-failure-case)
+    - [2.5.4 Best Practices + Common Mistakes](#254-best-practices-common-mistakes)
+    - [2.5.5 System Design / Interview Perspective](#255-system-design-interview-perspective)
+    - [2.5.6 Follow-up Questions to Challenge My Thinking](#256-follow-up-questions-to-challenge-my-thinking)
+    - [2.5.7 Mini Exercise or Practical Task](#257-mini-exercise-or-practical-task)
+  - [2.6 Handling Message Duplication & Ordering Guarantees](#26-handling-message-duplication-ordering-guarantees)
+    - [2.6.1 Concept Explanation (Clear Senior-Level Understanding)](#261-concept-explanation-clear-senior-level-understanding)
+    - [2.6.2 Deep Dive Internals (Staff-Level Depth)](#262-deep-dive-internals-staff-level-depth)
+    - [2.6.3 Production Story / Real Failure Case](#263-production-story-real-failure-case)
+    - [2.6.4 Best Practices + Common Mistakes](#264-best-practices-common-mistakes)
+    - [2.6.5 System Design / Interview Perspective](#265-system-design-interview-perspective)
+    - [2.6.6 Follow-up Questions to Challenge My Thinking](#266-follow-up-questions-to-challenge-my-thinking)
+    - [2.6.7 Mini Exercise or Practical Task](#267-mini-exercise-or-practical-task)
+
 
 ---
 
@@ -800,6 +928,385 @@ Now Kafka says:
 ❌ Producer A is now fenced
 ```
 
+### 1.2.7. Idempotent Producer
+
+#### Vấn đề cần giải quyết
+
+Khi producer retry, broker cần biết: "Đây là message mới hay retry của message cũ?"
+
+#### Cơ chế: Producer ID (PID) + Sequence Number
+
+**Khi producer khởi động:**
+
+```
+Producer → InitProducerId RPC → Broker Coordinator
+         ← Producer ID (PID) = 12345
+```
+
+Broker gán cho producer một **PID duy nhất** (64-bit integer).
+
+**Khi gửi message:**
+
+```
+Producer gửi: {
+    PID: 12345,
+    Epoch: 0,           // Tăng khi producer restart/fail
+    Sequence: 0,        // Tăng monotonically cho mỗi partition
+    Topic: "orders",
+    Partition: 2,
+    Data: {...}
+}
+```
+
+**Broker xử lý:**
+
+```
+Broker nhớ: last_sequence[PID=12345][Partition=2] = -1 (chưa có)
+
+Nhận batch với Sequence=0:
+    0 == last_sequence + 1 → ACCEPT, ghi vào log
+    last_sequence = 0
+
+Nhận batch với Sequence=1:
+    1 == last_sequence + 1 → ACCEPT, ghi vào log
+    last_sequence = 1
+
+⚡ ACK bị mất, Producer retry Sequence=1:
+    1 == last_sequence (không phải last+1, mà bằng last) → DUPLICATE, DROP silently
+    Trả về ACK như thể ghi thành công (producer không biết là duplicate)
+
+Nhận batch với Sequence=3 (skip 2):
+    3 != last_sequence + 1 → ERROR: OutOfOrderSequenceException
+    (Điều này không nên xảy ra nếu producer hoạt động đúng)
+```
+
+#### Kích hoạt Idempotent Producer
+
+```java
+Properties props = new Properties();
+props.put("enable.idempotence", "true");  // Magic flag
+
+// Các config sau được tự động set khi enable idempotence:
+// acks = "all"           (bắt buộc)
+// retries = MAX_INT      (bắt buộc)
+// max.in.flight.requests.per.connection = 5  (giới hạn tối đa)
+
+props.put("bootstrap.servers", "localhost:9092");
+```
+
+#### Giới hạn của Idempotent Producer
+
+Idempotent Producer chỉ đảm bảo **per-partition deduplication**. Nó KHÔNG đảm bảo:
+
+- Atomic write across **multiple partitions**
+- Atomic write đến **multiple topics**
+- Coordination với **consumer offset commits**
+
+Đó là lý do cần **Transactions**.
+
+### 1.2.8. Transactions — Atomic Writes across Partitions
+
+#### Vấn đề cần giải quyết
+
+Xét use case: Consumer đọc từ topic A, xử lý, ghi vào topic B, commit offset.
+
+```
+Read from topic-A partition-0, offset 100
+Process → produce to topic-B partition-3
+Commit offset 100 for topic-A partition-0
+
+⚡ Crash sau khi ghi topic-B nhưng trước khi commit offset:
+→ Restart → Đọc lại offset 100 → Xử lý lại → Ghi topic-B lần 2 → Duplicate!
+```
+
+Transactions giải quyết: "Ghi vào topic-B VÀ commit offset phải là một atomic operation."
+
+#### Kiến trúc: Transaction Coordinator
+
+Mỗi Kafka broker có thể là **Transaction Coordinator** cho một số producers. Coordinator được xác định bởi:
+
+```
+coordinator_partition = hash(transactional.id) % num_partitions_of___transaction_state_topic
+```
+
+#### Giao thức 2-Phase Commit (2PC) của Kafka
+
+**Phase 1: Begin & Write**
+
+```
+[1] Producer → AddPartitionsToTxn → Transaction Coordinator
+    "Tôi (TxID=my-service-1) sẽ ghi vào: topic-B partition-3, __consumer_offsets partition-7"
+    Coordinator ghi: TxID → {status: ONGOING, partitions: [B-3, offsets-7]}
+
+[2] Producer ghi messages vào topic-B partition-3
+    Messages được đánh dấu: PID=12345, Epoch=1, isTransactional=true
+
+[3] Producer ghi offset vào __consumer_offsets (special API: TxnOffsetCommit)
+    Commit record được đánh dấu: isTransactional=true
+```
+
+**Phase 2: Commit**
+
+```
+[4] Producer → EndTransaction(COMMIT) → Transaction Coordinator
+    Coordinator ghi: TxID → {status: PREPARE_COMMIT}
+
+[5] Coordinator ghi COMMIT marker vào mỗi partition liên quan:
+    - topic-B partition-3: [COMMIT marker, PID=12345, Epoch=1]
+    - __consumer_offsets partition-7: [COMMIT marker, PID=12345, Epoch=1]
+
+[6] Coordinator cập nhật: TxID → {status: COMPLETE}
+
+[7] Coordinator trả về thành công cho Producer
+```
+
+**Phase 2: Abort** (khi có lỗi)
+
+```
+[4'] Producer → EndTransaction(ABORT) → Transaction Coordinator
+     HOẶC: Transaction timeout → Coordinator tự abort
+
+[5'] Coordinator ghi ABORT marker vào mỗi partition:
+    - topic-B partition-3: [ABORT marker, PID=12345, Epoch=1]
+
+[6'] Consumers thấy ABORT marker → Bỏ qua tất cả messages của transaction này
+```
+
+#### Implementation
+
+```java
+Properties props = new Properties();
+props.put("enable.idempotence", "true");
+props.put("transactional.id", "my-service-instance-1"); // Unique per producer instance
+props.put("transaction.timeout.ms", 60000);
+props.put("bootstrap.servers", "localhost:9092");
+
+Producer<String, String> producer = new KafkaProducer<>(props);
+producer.initTransactions(); // Gọi một lần khi khởi động
+
+// Trong consume-transform-produce loop:
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+
+    try {
+        producer.beginTransaction();
+
+        for (ConsumerRecord<String, String> record : records) {
+            String result = transform(record.value());
+            producer.send(new ProducerRecord<>("output-topic", record.key(), result));
+        }
+
+        // Ghi offset vào transaction (thay vì commitSync() thông thường)
+        Map<TopicPartition, OffsetAndMetadata> offsets = buildOffsetMap(records);
+        producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+
+        producer.commitTransaction(); // Atomic: cả ghi lẫn commit offset
+
+    } catch (ProducerFencedException | InvalidProducerEpochException e) {
+        // Producer khác đã claim transactional.id này → Đây là zombie, shutdown
+        producer.close();
+        break;
+    } catch (KafkaException e) {
+        producer.abortTransaction(); // Rollback
+        consumer.seek(...); // Reset consumer về vị trí cũ
+    }
+}
+```
+
+#### Zombie Fencing — Tại sao cần Epoch?
+
+Xét tình huống:
+
+```
+Producer Instance A (PID=100, Epoch=0) đang xử lý...
+⚡ GC pause dài / network timeout → Coordinator coi là dead
+
+Producer Instance B restart với transactional.id="my-service-1"
+→ Coordinator assign: PID=100, Epoch=1 (tăng epoch!)
+
+Instance A hồi phục, cố ghi tiếp với Epoch=0
+→ Broker reject: "Your epoch (0) < current epoch (1). You are a zombie. Die."
+→ Instance A nhận ProducerFencedException → Shutdown
+
+Chỉ có Instance B (Epoch=1) tiếp tục hoạt động.
+```
+
+**Epoch là cơ chế đảm bảo chỉ có một producer "sống" tại một thời điểm** cho mỗi `transactional.id`.
+
+### 1.2.9. Consumer-side Exactly-Once
+
+#### Isolation Level: read_committed vs read_uncommitted
+
+```java
+// Default: read_uncommitted — Đọc cả messages chưa committed
+props.put("isolation.level", "read_uncommitted");
+
+// Exactly-Once: read_committed — Chỉ đọc messages đã committed
+props.put("isolation.level", "read_committed");
+```
+
+#### Cơ chế hoạt động của read_committed
+
+Consumer với `read_committed` sẽ không trả về messages cho đến khi transaction của chúng được commit hoặc abort.
+
+```
+Partition log:
+  Offset 0: [BEGIN TxID=tx-1]
+  Offset 1: [Message M1, TxID=tx-1] ← Chưa committed
+  Offset 2: [Message M2, TxID=tx-1] ← Chưa committed
+  Offset 3: [Message M3, no-txn]    ← Non-transactional (committed ngay)
+  Offset 4: [BEGIN TxID=tx-2]
+  Offset 5: [Message M4, TxID=tx-2] ← Chưa committed
+  Offset 6: [COMMIT TxID=tx-1]      ← tx-1 committed!
+
+Consumer với read_committed poll():
+→ Trả về: M3 (non-txn, committed), M1, M2 (tx-1, now committed)
+→ Không trả về: M4 (tx-2, vẫn chưa committed)
+
+LSO (Last Stable Offset) = 5 (offset cuối chưa committed)
+Consumer không thể vượt qua LSO với read_committed
+```
+
+#### Transaction Mark trong Log
+
+Khi transaction commit, Kafka ghi **Control Batch** vào partition:
+
+```
+Control Batch {
+    PID: 12345,
+    Epoch: 1,
+    TransactionResult: COMMIT  // hoặc ABORT
+}
+```
+
+Consumer thấy ABORT marker → Skip tất cả messages có cùng PID+Epoch trong window đó.
+
+---
+
+### 1.2.10. End-to-End Exactly-Once Architecture
+
+#### Pattern: Consume-Transform-Produce
+
+Đây là pattern phổ biến nhất cần Exactly-Once:
+
+```
+Input Topic → [Kafka Streams / Custom Consumer] → Output Topic
+                         ↕
+              __consumer_offsets
+```
+
+**Đảm bảo E2E Exactly-Once yêu cầu:**
+
+```
+Producer:  enable.idempotence=true  +  transactional.id=unique
+Consumer:  isolation.level=read_committed  +  enable.auto.commit=false
+```
+
+#### Kafka Streams (built-in E2E EOS)
+
+Kafka Streams tự handle tất cả:
+
+```java
+Properties props = new Properties();
+props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-streams-app");
+props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+          StreamsConfig.EXACTLY_ONCE_V2); // Kafka 2.5+
+
+StreamsBuilder builder = new StreamsBuilder();
+KStream<String, String> input = builder.stream("input-topic");
+input
+    .mapValues(value -> transform(value))
+    .to("output-topic");
+
+KafkaStreams streams = new KafkaStreams(builder.build(), props);
+streams.start();
+// EOS được đảm bảo tự động
+```
+
+#### EXACTLY_ONCE_V2 vs EXACTLY_ONCE (legacy)
+
+| Feature                 | EXACTLY_ONCE (v1)         | EXACTLY_ONCE_V2                            |
+| ----------------------- | ------------------------- | ------------------------------------------ |
+| Transaction Coordinator | Per task                  | Per thread (shared)                        |
+| Số lượng transactions   | Cao (1 per task per poll) | Thấp hơn (batched)                         |
+| Throughput              | Thấp hơn                  | Cao hơn ~20%                               |
+| Min Kafka Version       | 0.11                      | 2.5                                        |
+| Rebalancing overhead    | Cao                       | Thấp (incremental cooperative rebalancing) |
+
+---
+
+### 1.2.11. Failure Scenarios & Recovery
+
+#### Scenario 1: Producer crash giữa transaction
+
+```
+Timeline:
+T=0: beginTransaction()
+T=1: send() → messages ghi vào broker với status UNCOMMITTED
+T=2: ⚡ Producer crash
+
+Recovery:
+- Coordinator detect: transaction timeout (transaction.timeout.ms đã hết)
+- Coordinator tự động abort transaction
+- Ghi ABORT marker vào tất cả partitions liên quan
+- Consumers với read_committed sẽ skip những messages này
+```
+
+#### Scenario 2: Coordinator crash
+
+```
+Timeline:
+T=0: Producer beginTransaction() → Coordinator A ghi TxID status=ONGOING
+T=1: Producer gửi messages
+T=2: Producer commitTransaction() → Ghi vào Coordinator A: status=PREPARE_COMMIT
+T=3: ⚡ Coordinator A crash
+
+Recovery:
+- Coordinator B nhận leader election cho __transaction_state partition
+- B đọc TxID status=PREPARE_COMMIT từ log
+- B biết: transaction này ĐÃ được quyết định là COMMIT (irrevocable)
+- B hoàn thành commit: ghi COMMIT markers vào tất cả partitions
+- Kết quả: Transaction committed thành công dù coordinator crash
+```
+
+**Tại sao PREPARE_COMMIT là irrevocable?**
+
+Đây là nguyên tắc 2PC: Một khi đã ghi PREPARE_COMMIT, quyết định commit là KHÔNG THỂ đảo ngược. Coordinator mới sẽ luôn hoàn thành commit, không bao giờ abort.
+
+#### Scenario 3: Broker crash (partition leader failure)
+
+```
+Timeline:
+T=0: Producer gửi batch với Sequence=5, PID=100
+T=1: Leader ghi vào log, replicate sang followers
+T=2: ⚡ Leader crash trước khi gửi ACK
+T=3: Follower được elect làm leader mới
+
+Recovery:
+- Producer timeout → Retry batch Sequence=5
+- New leader kiểm tra: last_sequence[PID=100] = 5 (đã có trong replicated log)
+- 5 == last_sequence (không phải +1) → DUPLICATE, DROP
+- Trả về ACK thành công
+- Kết quả: Message được ghi đúng một lần
+```
+
+#### Scenario 4: Consumer rebalance giữa transaction
+
+```
+Timeline:
+T=0: Consumer A đang xử lý partition 0 của input-topic
+T=1: Consumer B join group → Rebalance → Partition 0 assign cho B
+T=2: Consumer A (zombie) cố commit transaction với old generation
+
+Recovery:
+- sendOffsetsToTransaction() gọi GroupCoordinator để verify generation
+- GroupCoordinator trả về: "Consumer A's generation is invalid (rebalanced)"
+- Producer nhận: InvalidProducerEpochException hoặc FencedInstanceIdException
+- Transaction bị abort
+- Consumer B reprocess từ đầu
+```
+
 ---
 
 ## 1.3 Consumer Internals (Consumer Groups, Group Coordinator, Rebalancing strategies, Offset management)
@@ -840,33 +1347,389 @@ Scale consumers = partition count. For low-latency, small max.poll.records + fre
 
 ## 1.4 Delivery Semantics (At-most-once, At-least-once, Exactly-once)
 
-### 1.4.1 Concept Explanation
+### Tại sao delivery semantics quan trọng?
 
-- At-most-once: acks=0 or auto.commit + no retry → possible loss
-- At-least-once: acks=1/all + retries + manual commit after process → possible duplicates
-- Exactly-once: idempotent producer + transactions + EOS consumer
+Trong distributed system, **network là unreliable**. Bất kỳ message nào cũng có thể:
 
-### 1.4.2 Deep Dive Internals
+- Bị **lost** (producer gửi nhưng broker không nhận được)
+- Bị **duplicated** (broker nhận rồi nhưng producer nghĩ là chưa, gửi lại)
+- Bị **reordered** (đến đích không theo thứ tự)
 
-Exactly-once requires:
+Delivery semantics là **contract** giữa producer, broker, và consumer về cách hệ thống xử lý những tình huống này.
 
-- Producer: idempotent + transactional
-- Consumer: isolation.level=read_committed
-- Offsets committed inside transaction
+### Ba mức độ đảm bảo
 
-### 1.4.3 Production Story / Real Failure Case
+```
+At-Most-Once:    Producer → [0 hoặc 1 lần] → Consumer
+At-Least-Once:   Producer → [1 hoặc nhiều lần] → Consumer
+Exactly-Once:    Producer → [đúng 1 lần] → Consumer
+```
 
-Payment system: at-least-once → crash after process before commit → double payments. Fixed with transactions + read_committed.
+**Không có mức nào "tốt nhất" tuyệt đối.** Mỗi mức có trade-off giữa:
 
-### 1.4.4 Best Practices + Common Mistakes
+- **Durability** (độ bền của message)
+- **Throughput** (số message/giây)
+- **Latency** (thời gian xử lý)
+- **Complexity** (độ phức tạp implementation)
 
-- Default to at-least-once + idempotent downstream
-- Use exactly-once only when needed (costly)
-- Mistake: think acks=all = exactly-once (no — needs full chain)
+### Anatomy của một Message Journey
 
-### 1.4.5 System Design / Interview Perspective
+Để hiểu delivery semantics, bạn cần hiểu message đi qua bao nhiêu điểm nguy hiểm:
 
-Trade-off: exactly-once = higher latency & broker load. Prefer at-least-once + dedup when possible.
+```
+Producer App
+    │
+    │  [Step 1] Producer gọi send()
+    │
+    ▼
+Producer Buffer (batch)
+    │
+    │  [Step 2] Gửi qua network đến Broker Leader
+    │
+    ▼
+Broker Leader (partition leader)
+    │
+    │  [Step 3] Ghi vào Leader Log
+    │
+    ▼
+Broker Followers (ISR - In-Sync Replicas)
+    │
+    │  [Step 4] Replicate sang followers
+    │
+    ▼
+Broker Leader gửi ACK về Producer
+    │
+    │  [Step 5] Producer nhận ACK
+    │
+    ▼
+Producer xử lý ACK (hoặc retry nếu timeout)
+
+    ... (sau đó consumer side) ...
+
+Consumer
+    │
+    │  [Step 6] Consumer poll() messages
+    │
+    ▼
+Consumer xử lý message (business logic)
+    │
+    │  [Step 7] Consumer commit offset
+    │
+    ▼
+Broker lưu committed offset
+```
+
+**Mỗi bước là một điểm có thể fail.** Delivery semantics quyết định: khi failure xảy ra tại bước X, hệ thống sẽ làm gì?
+
+### 1.4.1 At-Most-Once (≤1)
+
+#### Nguyên tắc
+
+> **"Fire and forget"** — Producer gửi xong, không quan tâm broker có nhận hay không. Consumer commit offset _trước_ khi xử lý.
+
+#### Cơ chế hoạt động
+
+**Producer side:**
+
+```java
+Properties props = new Properties();
+props.put("acks", "0");           // Không chờ ACK từ broker
+props.put("retries", 0);          // Không retry
+props.put("bootstrap.servers", "localhost:9092");
+
+Producer<String, String> producer = new KafkaProducer<>(props);
+producer.send(new ProducerRecord<>("topic", "key", "value"));
+// Không gọi get() - không chờ kết quả
+```
+
+**Consumer side (commit trước xử lý):**
+
+```java
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+
+    // ⚠️ Commit TRƯỚC khi xử lý
+    consumer.commitSync();
+
+    for (ConsumerRecord<String, String> record : records) {
+        process(record); // Nếu crash ở đây → message bị mất vĩnh viễn
+    }
+}
+```
+
+#### Failure analysis
+
+**Scenario 1:** Producer gửi → Network drop → Broker không nhận
+
+```
+Result: Message lost. Producer không biết, không retry.
+```
+
+**Scenario 2:** Broker nhận → Gửi ACK → ACK bị drop
+
+```
+Result với acks=0: Producer không bao giờ chờ ACK → OK (message đã đến broker)
+Result với acks=1, retries=0: Producer nhận timeout → Không retry → OK (message đã đến)
+```
+
+**Scenario 3:** Consumer poll → Commit offset → Process crash
+
+```
+Result: Offset đã được commit. Message không được xử lý.
+Khi consumer restart, nó đọc từ committed offset → Message bị bỏ qua vĩnh viễn.
+```
+
+#### Khi nào dùng At-Most-Once?
+
+- **Metrics/Telemetry:** Mất 0.01% data point không ảnh hưởng dashboard
+- **Log aggregation:** Drop vài log lines chấp nhận được
+- **Real-time event tracking** khi freshness quan trọng hơn completeness
+- Khi **throughput là tối thượng** và business có thể chịu được data loss
+
+### 1.4.2 At-Least-Once (≥1)
+
+#### Nguyên tắc
+
+> **"Better safe than duplicate"** — Producer retry khi không nhận được ACK. Consumer commit offset _sau_ khi xử lý. Hệ quả: message có thể được xử lý nhiều hơn một lần.
+
+#### Cơ chế hoạt động
+
+**Producer side:**
+
+```java
+Properties props = new Properties();
+props.put("acks", "all");           // Chờ tất cả ISR xác nhận
+props.put("retries", Integer.MAX_VALUE);  // Retry vô hạn
+props.put("retry.backoff.ms", 100);
+props.put("delivery.timeout.ms", 120000); // 2 phút timeout tổng
+props.put("bootstrap.servers", "localhost:9092");
+```
+
+**Consumer side (commit sau xử lý):**
+
+```java
+Properties consumerProps = new Properties();
+consumerProps.put("enable.auto.commit", "false"); // Tắt auto-commit
+
+KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+
+while (true) {
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+
+    for (ConsumerRecord<String, String> record : records) {
+        process(record); // Xử lý trước
+    }
+
+    // Commit SAU khi xử lý xong
+    consumer.commitSync(); // ⚠️ Nếu crash TRƯỚC đây → sẽ reprocess
+}
+```
+
+#### Failure analysis — Tại sao duplicate xảy ra?
+
+**Scenario nguy hiểm nhất — "ACK bị mất":**
+
+```
+Step 1: Producer gửi message M1 đến Broker
+Step 2: Broker nhận và ghi thành công
+Step 3: Broker gửi ACK về Producer
+Step 4: ⚡ Network partition → ACK bị drop
+Step 5: Producer timeout → Retry → Gửi M1 lần 2
+Step 6: Broker nhận M1 lần 2 → Ghi thêm một bản nữa vào log
+Result: M1 xuất hiện 2 lần trong Kafka partition
+```
+
+**Consumer duplicate scenario:**
+
+```
+Step 1: Consumer poll M1, M2, M3
+Step 2: process(M1) ✓
+Step 3: process(M2) ✓
+Step 4: process(M3) ✓
+Step 5: ⚡ Consumer crash trước khi commitSync()
+Step 6: Consumer restart, đọc lại từ last committed offset
+Step 7: process(M1) lại, process(M2) lại, process(M3) lại
+Result: M1, M2, M3 được xử lý 2 lần
+```
+
+#### Idempotency là giải pháp phía consumer
+
+Với At-Least-Once, **consumer phải idempotent** — xử lý cùng một message nhiều lần phải cho kết quả giống nhau:
+
+```java
+// ❌ NON-IDEMPOTENT: Mỗi lần xử lý tăng thêm
+void process(OrderEvent event) {
+    db.execute("UPDATE account SET balance = balance + ? WHERE id = ?",
+               event.amount, event.accountId);
+}
+
+// ✅ IDEMPOTENT: Dùng event ID để dedup
+void process(OrderEvent event) {
+    if (db.exists("SELECT 1 FROM processed_events WHERE event_id = ?", event.id)) {
+        return; // Already processed
+    }
+    db.transaction(() -> {
+        db.execute("UPDATE account SET balance = balance + ? WHERE id = ?",
+                   event.amount, event.accountId);
+        db.execute("INSERT INTO processed_events (event_id) VALUES (?)", event.id);
+    });
+}
+```
+
+#### Khi nào dùng At-Least-Once?
+
+- **Default choice** cho hầu hết use case
+- Khi business logic có thể làm idempotent
+- Payment processing với dedup logic
+- Order management với event sourcing
+- Khi **data loss là không thể chấp nhận** nhưng duplicate có thể handle
+
+### 1.4.3 Exactly-Once (=1)
+
+#### Nguyên tắc
+
+> **"Đúng một lần, dù network có chập chờn, dù broker có crash"** — Kafka đảm bảo mỗi message được ghi vào partition đúng một lần, và consumer đọc đúng một lần.
+
+#### Đây là vấn đề khó nhất trong distributed systems
+
+Exactly-Once vi phạm trực giác. Trong distributed system:
+
+- Bạn không biết request thành công hay fail (two generals problem)
+- Retry là cần thiết nhưng gây duplicate
+- "Đúng một lần" yêu cầu coordination phức tạp
+
+Kafka giải quyết bằng **hai cơ chế kết hợp:**
+
+1. **Idempotent Producer** — Dedup ở broker level
+2. **Transactions** — Atomic writes across partitions + consumer group coordination
+
+### 1.4.4. Performance Trade-offs
+
+#### Throughput comparison (approximate, production-scale)
+
+| Semantic                    | Relative Throughput | Latency Added | Use Case           |
+| --------------------------- | ------------------- | ------------- | ------------------ |
+| At-Most-Once (acks=0)       | 100% (baseline)     | ~0ms extra    | Metrics, logs      |
+| At-Least-Once (acks=1)      | 85-90%              | 1-5ms         | General purpose    |
+| At-Least-Once (acks=all)    | 70-80%              | 5-20ms        | Financial data     |
+| Exactly-Once (Idempotent)   | 65-75%              | 5-20ms        | Payment dedup      |
+| Exactly-Once (Transactions) | 50-65%              | 10-50ms       | Critical pipelines |
+
+#### Overhead của Transactions
+
+**Network overhead:**
+
+```
+Per transaction:
+- InitProducerId: 1 RPC (startup only)
+- AddPartitionsToTxn: 1 RPC per unique partition set
+- EndTransaction: 1 RPC
+- Coordinator writes COMMIT markers: N RPCs (N = số partitions)
+```
+
+**Latency overhead:**
+
+```
+Transaction commit latency ≈
+    2 × network RTT (begin → coordinator → partitions → ack)
+    + disk fsync time
+    + replication time (nếu acks=all)
+
+Thường: 10-50ms additional per transaction
+```
+
+**Throughput optimization: Batching**
+
+```java
+// ❌ BAD: Transaction per message → Overhead rất cao
+for (record : records) {
+    producer.beginTransaction();
+    producer.send(...);
+    producer.commitTransaction(); // 10-50ms mỗi lần
+}
+
+// ✅ GOOD: Batch nhiều messages vào một transaction
+producer.beginTransaction();
+for (record : records) {
+    producer.send(...); // Non-blocking
+}
+producer.commitTransaction(); // Chỉ 1 lần overhead
+```
+
+#### Kafka Streams throughput tuning
+
+```java
+// Tăng commit interval → Ít transactions hơn → Throughput cao hơn
+// Trade-off: Latency cao hơn
+props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000"); // Default: 100ms
+
+// Tăng batch size
+props.put(ProducerConfig.BATCH_SIZE_CONFIG, 1048576); // 1MB
+props.put(ProducerConfig.LINGER_MS_CONFIG, 100); // Wait 100ms để batch
+```
+
+### 1.4.5. Decision Framework cho Staff Engineer
+
+#### Decision tree
+
+```
+Bắt đầu: Chọn delivery semantic
+
+├── Data loss có chấp nhận được không?
+│   ├── YES → At-Most-Once
+│   │         Config: acks=0, retries=0
+│   │         Use case: Metrics, telemetry, non-critical logs
+│   │
+│   └── NO → Tiếp tục...
+│
+├── Business logic có thể làm idempotent không?
+│   ├── YES (dễ dàng) → At-Least-Once + Idempotent Consumer
+│   │                   Config: acks=all, retries=MAX, enable.auto.commit=false
+│   │                   Thêm: dedup logic ở consumer (event ID + DB)
+│   │                   Use case: Hầu hết production systems
+│   │
+│   └── NO (quá phức tạp / quá tốn kém) → Exactly-Once
+│
+├── Pattern nào?
+│   ├── Producer only (chỉ write, không read) → Idempotent Producer
+│   │   Config: enable.idempotence=true
+│   │
+│   ├── Consume-Transform-Produce → Full EOS
+│   │   Config: enable.idempotence + transactional.id + read_committed
+│   │   Consider: Kafka Streams với EXACTLY_ONCE_V2
+│   │
+│   └── Cross-system (Kafka + Database) → Outbox Pattern
+│       Không có built-in EOS cho external systems
+│
+└── Throughput requirement?
+    ├── < 10k msg/sec → Any semantic OK, choose based on consistency need
+    ├── 10k-100k msg/sec → Carefully tune batch size, linger.ms
+    └── > 100k msg/sec → Strongly prefer At-Least-Once; EOS cần careful tuning
+```
+
+#### Outbox Pattern cho Cross-System EOS
+
+Kafka Transactions không thể đảm bảo EOS khi có external system (PostgreSQL, Redis, etc.):
+
+```
+❌ KHÔNG an toàn:
+beginTransaction()
+    update PostgreSQL balance
+    send Kafka event
+commitTransaction()
+→ PostgreSQL và Kafka không phải cùng một transaction domain
+
+✅ OUTBOX PATTERN:
+1. Begin DB transaction
+2. UPDATE account SET balance = balance - amount
+3. INSERT INTO outbox (event_id, topic, payload) VALUES (...)
+4. Commit DB transaction  ← Single atomic operation
+
+5. Outbox Worker (Debezium/custom):
+   - READ from outbox WHERE published = false
+   - PUBLISH to Kafka với idempotent producer
+   - UPDATE outbox SET published = true, published_at = now()
+```
 
 ### 1.4.6 Follow-up Questions
 
