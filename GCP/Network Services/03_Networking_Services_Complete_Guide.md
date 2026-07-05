@@ -19,6 +19,7 @@
 ### 1.1 Khái Niệm & Tổng Quan
 
 **VPC là gì?**
+
 - Virtual Private Cloud - private network environment
 - Isolate resources trong GCP
 - Global resource (tuy nhiên subnets là regional)
@@ -26,6 +27,7 @@
 - Custom VPC cho specialized networking needs
 
 **Tại sao dùng VPC?**
+
 - Isolate resources (security)
 - Control traffic flow (firewall rules)
 - IP addressing scheme
@@ -62,6 +64,7 @@
 #### Creating VPC
 
 **Default VPC:**
+
 ```
 Automatically created per project:
   Name: default
@@ -70,6 +73,7 @@ Automatically created per project:
 ```
 
 **Custom VPC:**
+
 ```bash
 # Create custom VPC
 gcloud compute networks create my-vpc \
@@ -83,10 +87,10 @@ gcloud compute networks create my-vpc \
 ```
 
 **VPC Modes:**
+
 - **Auto mode**: Automatically creates subnets in each region
   - 10.0.0.0/8 block divided across regions
   - Simpler, but less control
-  
 - **Custom mode**: You define subnets manually
   - Full control over IP ranges
   - Can use any RFC 1918 private address space
@@ -130,6 +134,7 @@ gcloud compute networks subnets describe my-subnet \
 ```
 
 **Subnet Properties:**
+
 - `name`: Subnet name
 - `network`: Parent VPC
 - `region`: Region (cannot change)
@@ -146,19 +151,74 @@ gcloud compute networks subnets expand-ip-range my-subnet \
   --prefix-length=23  # /24 → /23 (doubles capacity)
 ```
 
----
+# Primary Range và Secondary Range trong GCP VPC
+
+Đây là khái niệm liên quan đến **VPC Subnet** trong Google Cloud, đặc biệt quan trọng khi làm việc với **GKE (Google Kubernetes Engine)**.
+
+## Primary Range (Phạm vi chính)
+
+- Là dải IP **mặc định** của một subnet, dùng để cấp địa chỉ IP cho các resource chính như **VM instances**, **internal load balancers**.
+- Mỗi subnet **chỉ có 1 primary range** duy nhất.
+- Khi tạo subnet, bạn phải chỉ định primary range (ví dụ: `10.0.0.0/20`).
+
+## Secondary Range (Phạm vi phụ)
+
+- Là (các) dải IP **bổ sung** được gắn thêm vào một subnet, ngoài primary range.
+- Một subnet có thể có **nhiều secondary range** (tối đa khoảng 30 range/subnet).
+- Thường dùng để cấp IP cho các mục đích đặc biệt — phổ biến nhất là **Pods** và **Services** trong GKE (mô hình **Alias IP**).
+
+## Bảng so sánh
+
+| Đặc điểm                            | Primary Range             | Secondary Range                         |
+| ----------------------------------- | ------------------------- | --------------------------------------- |
+| Số lượng trên 1 subnet              | Chỉ 1                     | Nhiều (0 → ~30)                         |
+| Bắt buộc khi tạo subnet?            | Có                        | Không (tùy chọn)                        |
+| Dùng cho                            | VM, internal LB, IP chính | Pod IPs, Service IPs (GKE Alias IP)     |
+| Đặt tên (range name)                | Không cần đặt tên riêng   | Phải đặt tên (vì có thể nhiều range)    |
+| Có thể route ra ngoài VPC mặc định? | Có                        | Có, nếu được cấu hình là Alias IP range |
+
+## Khi nào nên dùng Secondary Range?
+
+**1. GKE với VPC-native cluster (Alias IP)**
+Đây là trường hợp sử dụng phổ biến nhất:
+
+- **Primary range**: cấp IP cho **GKE Nodes**.
+- **Secondary range #1**: cấp IP cho **Pods** (`pod-range`) — cần range lớn vì mỗi Node có thể chạy nhiều Pod.
+- **Secondary range #2**: cấp IP cho **Services** (`services-range`) — dùng cho ClusterIP của Kubernetes Services.
+
+Ví dụ:
+
+```
+Primary:        10.0.0.0/20    (Nodes)
+Secondary 1:    10.4.0.0/14    (Pods - tên: gke-pods)
+Secondary 2:    10.0.32.0/20   (Services - tên: gke-services)
+```
+
+**2. Mở rộng không gian IP** mà không cần tạo subnet mới hoặc thay đổi primary range hiện có (tránh downtime, không ảnh hưởng đến IP của resource đang chạy).
+
+**3. Tách biệt logic giữa các loại traffic/resource** trong cùng một subnet, ví dụ: tách IP cho ứng dụng nội bộ và IP cho các container/pod.
+
+## Lưu ý quan trọng
+
+- VPC-native GKE cluster **bắt buộc** phải dùng secondary ranges cho Pods và Services (đây là khuyến nghị hiện tại của Google, thay cho route-based cluster đã legacy).
+- Secondary range **không thể trùng** hoặc chồng lấn (overlap) với primary range hoặc các secondary range khác trong cùng VPC.
+- Một khi đã tạo, bạn **không thể** chuyển một secondary range trở lại thành primary range hay đổi tên — cần cân nhắc kỹ khi thiết kế.
+
+## Nếu bạn đang thiết kế hệ thống GKE cụ thể, mình có thể giúp tính toán kích thước CIDR phù hợp cho từng range dựa trên số node/pod dự kiến.
 
 ### 1.3 IP Addressing
 
 #### Internal IP Addresses (Private)
 
 **Primary IP:**
+
 - Automatically assigned từ subnet CIDR range
 - Hoặc manually assigned
 - Persistent across stop/restart
 - Cannot be changed after assignment (must recreate instance)
 
 **Ephemeral IPs:**
+
 - Temporary, assigned at boot
 - Lost when instance stops
 - Reassigned on restart
@@ -178,6 +238,7 @@ gcloud compute instances create my-instance \
 #### External IP Addresses (Public)
 
 **Ephemeral IP:**
+
 - Assigned when instance created
 - Released when instance stops
 - Reassigned on restart
@@ -185,6 +246,7 @@ gcloud compute instances create my-instance \
 - Charged if reserved but not used
 
 **Static IP:**
+
 - Persists across stop/restart
 - Reserved exclusively for you
 - Charged even if not in use
@@ -207,6 +269,7 @@ gcloud compute instances add-access-config my-instance \
 ```
 
 **Cost Implications:**
+
 ```
 Ephemeral external IP (continuously running): Free
 Ephemeral external IP (not running): Charged
@@ -233,6 +296,7 @@ aliases=10.0.1.10/32,10.0.1.11/32
 ```
 
 **Use Cases:**
+
 - Multiple services per instance
 - Container networking (GKE)
 - Legacy applications with fixed IPs
@@ -270,6 +334,7 @@ Destination CIDR    Next Hop              Priority
 ```
 
 **Internet Gateway:**
+
 - Default next hop for 0.0.0.0/0
 - Allows egress to internet
 - Requires external IP for return traffic
@@ -300,6 +365,7 @@ gcloud compute routes create route-to-lb \
 #### Route Priority
 
 Lower priority executes first
+
 ```
 Priority 0:   Execute first
 Priority 1000: Default routes
@@ -389,19 +455,20 @@ Disabled: false
 
 **Detailed Components:**
 
-| Component | Options | Notes |
-|-----------|---------|-------|
-| Direction | INGRESS, EGRESS | Ingress = inbound |
-| Priority | 0-65534 | Lower = higher priority |
-| Action | ALLOW, DENY | First match wins |
-| Protocol | tcp, udp, icmp, esp | Or all |
-| Port | 0-65535 | Or ranges: 80,443 or 1024-2048 |
-| Source/Dest | IP ranges, tags, SAs | Multiple allowed |
-| Target | Tags or SAs | Rule applies to these |
+| Component   | Options              | Notes                          |
+| ----------- | -------------------- | ------------------------------ |
+| Direction   | INGRESS, EGRESS      | Ingress = inbound              |
+| Priority    | 0-65534              | Lower = higher priority        |
+| Action      | ALLOW, DENY          | First match wins               |
+| Protocol    | tcp, udp, icmp, esp  | Or all                         |
+| Port        | 0-65535              | Or ranges: 80,443 or 1024-2048 |
+| Source/Dest | IP ranges, tags, SAs | Multiple allowed               |
+| Target      | Tags or SAs          | Rule applies to these          |
 
 #### Network Tags vs Service Accounts
 
 **Network Tags (simpler, IP-independent):**
+
 ```bash
 # Create rule with tags
 gcloud compute firewall-rules create allow-http \
@@ -414,6 +481,7 @@ gcloud compute instances create my-instance \
 ```
 
 **Service Accounts (better for large deployments):**
+
 ```bash
 # Create service account
 gcloud iam service-accounts create web-app-sa
@@ -443,6 +511,7 @@ If no rule matches → Default action (DENY for ingress, ALLOW for egress)
 ```
 
 **Example:**
+
 ```
 Rules (by priority):
 1. deny-ssh (priority 100): DENY tcp:22 from 0.0.0.0/0
@@ -589,10 +658,12 @@ gcloud compute instances create my-instance \
 #### Permissions
 
 **Host Project (Shared VPC Admin):**
+
 - Can manage shared VPC
 - Can delegate subnet creation to service projects
 
 **Service Project (User):**
+
 - Can create resources in shared subnets
 - Cannot modify subnets
 
@@ -657,6 +728,7 @@ High-bandwidth, dedicated connection to GCP
 #### Types
 
 **Dedicated Interconnect:**
+
 - Direct dedicated connection (10Gbps or 100Gbps)
 - Very high availability
 - Low latency
@@ -664,6 +736,7 @@ High-bandwidth, dedicated connection to GCP
 - Best for: Large data transfers, mission-critical connectivity
 
 **Partner Interconnect:**
+
 - Via service provider
 - More affordable
 - Better availability
@@ -671,14 +744,14 @@ High-bandwidth, dedicated connection to GCP
 
 #### Vs VPN
 
-| Aspect | VPN | Dedicated Interconnect | Partner Interconnect |
-|--------|-----|----------------------|----------------------|
-| Bandwidth | 1.5 Gbps | 10-100 Gbps | Varies |
-| Cost | Low | High | Medium |
-| Latency | Higher | Lower | Lower |
-| Setup Time | Hours | Weeks | Days |
-| Failover | Auto | Manual | Manual |
-| Use Case | Small to medium | Large scale | Medium scale |
+| Aspect     | VPN             | Dedicated Interconnect | Partner Interconnect |
+| ---------- | --------------- | ---------------------- | -------------------- |
+| Bandwidth  | 1.5 Gbps        | 10-100 Gbps            | Varies               |
+| Cost       | Low             | High                   | Medium               |
+| Latency    | Higher          | Lower                  | Lower                |
+| Setup Time | Hours           | Weeks                  | Days                 |
+| Failover   | Auto            | Manual                 | Manual               |
+| Use Case   | Small to medium | Large scale            | Medium scale         |
 
 ---
 
@@ -706,6 +779,7 @@ gcloud compute networks subnets update my-subnet \
 #### Flow Log Data
 
 Each log entry contains:
+
 ```
 source IP, destination IP
 source port, destination port
@@ -789,6 +863,7 @@ Plan for growth:
 ### 1.12 VPC Exam Tips
 
 **Key Concepts:**
+
 - Global resource (subnets are regional)
 - Auto vs Custom mode
 - Internal & external IP addresses (ephemeral vs static)
@@ -800,6 +875,7 @@ Plan for growth:
 - Network tags (better than IPs for firewall rules)
 
 **Common Scenarios:**
+
 1. "Allow SSH from specific IP" → Firewall rule with source IP + tcp:22
 2. "Multiple projects share VPC" → Shared VPC
 3. "Connect on-premises to GCP" → Cloud VPN or Interconnect
@@ -813,6 +889,7 @@ Plan for growth:
 ### 2.1 Khái Niệm & Tổng Quan
 
 **Cloud Load Balancing là gì?**
+
 - Fully managed load balancing service
 - Distribute traffic across backends
 - Global service (anycast IP)
@@ -821,6 +898,7 @@ Plan for growth:
 - High availability & fault tolerance
 
 **Tại sao dùng Cloud Load Balancing?**
+
 - Distribute traffic to multiple backends
 - Auto-failover if backend fails
 - Session persistence/stickiness
@@ -851,6 +929,7 @@ Instances (could be auto-scaling)
 #### HTTP(S) Load Balancer (Layer 7)
 
 **Characteristics:**
+
 - Layer 7 (Application) load balancing
 - URL-based routing
 - SSL/TLS termination
@@ -858,6 +937,7 @@ Instances (could be auto-scaling)
 - Best for: Web applications, APIs, microservices
 
 **Routing Capabilities:**
+
 ```
 Host-based:
   api.example.com → API backend service
@@ -873,6 +953,7 @@ Combined:
 ```
 
 **Components:**
+
 ```
 HTTP(S) Load Balancer
 ├─ Frontend (Forwarding Rule)
@@ -899,6 +980,7 @@ HTTP(S) Load Balancer
 #### Network Load Balancer (Layer 4)
 
 **Characteristics:**
+
 - Layer 4 (Transport) load balancing
 - Ultra-high performance
 - Very high throughput (millions of RPS)
@@ -907,6 +989,7 @@ HTTP(S) Load Balancer
 - Best for: Gaming, IoT, real-time applications
 
 **When to use:**
+
 - Extreme performance needed
 - Non-HTTP protocols (TCP, UDP)
 - Millions of requests per second
@@ -916,17 +999,20 @@ HTTP(S) Load Balancer
 #### TCP/UDP Load Balancer (Layer 4)
 
 **Internal:**
+
 - Private IP address
 - Regional service
 - Internal traffic only
 - VPC-native
 
 **External:**
+
 - Public IP address
 - Global service
 - Internet-facing
 
 **TCP Load Balancer (Non-proxied):**
+
 ```
 Direct connection, no termination
 Lower latency, simpler
@@ -934,6 +1020,7 @@ Good for: Database replication, custom protocols
 ```
 
 **TCP Proxy:**
+
 ```
 Connection termination
 Higher latency, more features
@@ -1085,6 +1172,7 @@ Determine if backend is healthy
 #### Health Check Types
 
 **HTTP/HTTPS:**
+
 ```bash
 gcloud compute health-checks create http my-health-check \
   --port=80 \
@@ -1096,6 +1184,7 @@ gcloud compute health-checks create http my-health-check \
 ```
 
 **Configuration:**
+
 ```
 port: Port to check
 request-path: Path to request (default: /)
@@ -1106,6 +1195,7 @@ healthy-threshold: Successes before marking healthy (default: 2)
 ```
 
 **TCP:**
+
 ```bash
 gcloud compute health-checks create tcp my-tcp-check \
   --port=3306
@@ -1118,11 +1208,11 @@ gcloud compute health-checks create tcp my-tcp-check \
 def health():
     # Check database connectivity
     db.connection.ping()
-    
+
     # Check disk space
     if disk_usage > 95:
         return {'status': 'unhealthy'}, 503
-    
+
     return {'status': 'healthy'}, 200
 ```
 
@@ -1155,6 +1245,7 @@ Route requests from same client to same backend
 #### Types
 
 **CLIENT_IP (default):**
+
 ```
 Route based on client IP
 Pros: No session replication needed
@@ -1162,6 +1253,7 @@ Cons: Uneven distribution if many clients from same IP
 ```
 
 **GENERATED_COOKIE:**
+
 ```
 LB inserts cookie
 Client sends cookie back
@@ -1171,6 +1263,7 @@ Cons: Client must accept cookies
 ```
 
 **HTTP_COOKIE:**
+
 ```
 Application-set cookie
 LB uses value to route
@@ -1179,6 +1272,7 @@ Cons: Cookie value must be stable
 ```
 
 **Configuration:**
+
 ```bash
 gcloud compute backend-services update web-backend \
   --session-affinity=CLIENT_IP \
@@ -1200,22 +1294,22 @@ metadata:
 spec:
   defaultService: web-backend
   hostRules:
-  - hosts:
-    - api.example.com
-    pathMatcher: api-paths
+    - hosts:
+        - api.example.com
+      pathMatcher: api-paths
   pathMatchers:
-  - name: api-paths
-    defaultService: web-backend
-    pathRules:
-    - paths:
-      - /v1/users*
-      service: api-v1-backend
-    - paths:
-      - /v2/users*
-      service: api-v2-backend
-    - paths:
-      - /admin*
-      service: admin-backend
+    - name: api-paths
+      defaultService: web-backend
+      pathRules:
+        - paths:
+            - /v1/users*
+          service: api-v1-backend
+        - paths:
+            - /v2/users*
+          service: api-v2-backend
+        - paths:
+            - /admin*
+          service: admin-backend
 ```
 
 #### Host-Based Routing
@@ -1236,6 +1330,7 @@ gcloud compute url-maps add-host-rule web-map \
 ### 2.7 Internal Load Balancer
 
 **Characteristics:**
+
 - Private IP address (internal VPC)
 - Regional (not global)
 - For internal traffic only
@@ -1300,6 +1395,7 @@ gcloud compute url-maps add-path-rule my-map \
 ### 2.9 Load Balancer Exam Tips
 
 **Key Concepts:**
+
 - Global vs Regional (HTTP(S) = Global, Internal = Regional)
 - Layer 4 vs Layer 7 (Network = Layer 4, HTTP(S) = Layer 7)
 - Backend services (group of instances/services)
@@ -1310,6 +1406,7 @@ gcloud compute url-maps add-path-rule my-map \
 - Traffic splitting (canary deployments)
 
 **Common Scenarios:**
+
 1. "Route API traffic separately from web" → HTTP(S) LB with host/path rules
 2. "Ensure requests go to same backend" → Session affinity
 3. "Gradually roll out new version" → Traffic splitting
@@ -1323,6 +1420,7 @@ gcloud compute url-maps add-path-rule my-map \
 ### 3.1 Khái Niệm & Tổng Quan
 
 **Cloud Armor là gì?**
+
 - DDoS protection & Web Application Firewall (WAF)
 - Layer 7 (Application) protection
 - Works with Cloud Load Balancing
@@ -1330,6 +1428,7 @@ gcloud compute url-maps add-path-rule my-map \
 - Logging & monitoring
 
 **Tại sao dùng Cloud Armor?**
+
 - Protect against DDoS attacks
 - Block malicious traffic
 - Rate limiting
@@ -1395,7 +1494,7 @@ gcloud compute backend-services update web-backend \
 ```yaml
 Priority: 1000
 Match:
-  VersionedExpr: "SQLi_v33"  # Predefined rules
+  VersionedExpr: "SQLi_v33" # Predefined rules
 Condition:
   - IPv4Address: [203.0.113.1]
   - RequestUri: [/admin/*]
@@ -1406,6 +1505,7 @@ Action: ALLOW | DENY | RATE_BASED_BAN | REDIRECT_TO_GOOGLE_RECAPTCHA | THROTTLE
 
 **OWASP ModSecurity Core Rule Set (CRS):**
 Protection against:
+
 - SQL injection
 - Cross-site scripting (XSS)
 - Local file inclusion
@@ -1583,6 +1683,7 @@ gcloud compute security-policies rules create 1002 \
 ```
 
 **Parameters:**
+
 ```
 rate-limit-threshold-count: Max requests allowed (100)
 rate-limit-threshold-interval-sec: Time window (60 seconds)
@@ -1601,6 +1702,7 @@ gcloud compute security-policies rules create 1003 \
 ```
 
 **Behavior:**
+
 ```
 User request arrives
   ↓
@@ -1830,14 +1932,15 @@ Logging: Standard Cloud Logging charges
 ```
 
 **Example Cost:**
+
 ```
 1 policy with 10 rules:
   Policy: $5
   Rules: $10 (10 × $1)
-  
+
 1 billion requests/month:
   Evaluation: $0.75 × 1000 = $750
-  
+
 Total: $765/month
 ```
 
@@ -1846,6 +1949,7 @@ Total: $765/month
 ### 3.12 Cloud Armor Exam Tips
 
 **Key Concepts:**
+
 - Layer 7 WAF & DDoS protection
 - Works with Cloud Load Balancer
 - Rules-based (match conditions, actions)
@@ -1857,6 +1961,7 @@ Total: $765/month
 - Rate limiting (by IP, duration)
 
 **Common Scenarios:**
+
 1. "Block requests from specific country" → Geographic rule + DENY
 2. "Rate limit API" → RATE_BASED_BAN with threshold
 3. "Protect admin interface" → Path rule + DENY for non-internal IPs
@@ -1869,12 +1974,12 @@ Total: $765/month
 
 ### VPC vs Load Balancing vs Cloud Armor
 
-| Aspect | VPC | Load Balancing | Cloud Armor |
-|--------|-----|-----------------|-------------|
-| **Layer** | Network (L3-L4) | Transport/App (L4-L7) | Application (L7) |
-| **Purpose** | Network isolation | Traffic distribution | Attack protection |
-| **Scope** | All resources | Backends | Requests to LB |
-| **Cost** | Free | Pay per rule/request | Pay per request |
+| Aspect      | VPC               | Load Balancing        | Cloud Armor       |
+| ----------- | ----------------- | --------------------- | ----------------- |
+| **Layer**   | Network (L3-L4)   | Transport/App (L4-L7) | Application (L7)  |
+| **Purpose** | Network isolation | Traffic distribution  | Attack protection |
+| **Scope**   | All resources     | Backends              | Requests to LB    |
+| **Cost**    | Free              | Pay per rule/request  | Pay per request   |
 
 ### Decision Tree
 
@@ -1902,6 +2007,7 @@ Need DDoS/WAF protection?
 ### Scenario 1: Multi-Tier Application with Load Balancing
 
 **Architecture:**
+
 ```
 Internet
     ↓
@@ -2056,6 +2162,7 @@ gcloud compute forwarding-rules describe app-rule --global
 ### Scenario 2: Protect API with Cloud Armor
 
 **Requirements:**
+
 - Rate limit API to 100 requests/min per IP
 - Block requests from certain countries
 - Protect /admin path
@@ -2106,6 +2213,7 @@ done
 ### Scenario 3: VPC Peering for Multi-Project Setup
 
 **Architecture:**
+
 ```
 Project A (Production)
 ├─ VPC A (10.0.0.0/16)
@@ -2187,6 +2295,7 @@ ping 10.1.0.10  # Should work
 ### Scenario 4: Internal Load Balancer for Database Access
 
 **Architecture:**
+
 ```
 Application tier (Web)
     ↓
@@ -2252,6 +2361,7 @@ gcloud compute forwarding-rules create db-lb \
 ## Summary Checklist
 
 ### VPC
+
 - [ ] Understand global vs regional (VPC global, subnets regional)
 - [ ] Auto vs Custom subnet mode
 - [ ] Internal & external IP addresses (ephemeral vs static)
@@ -2265,6 +2375,7 @@ gcloud compute forwarding-rules create db-lb \
 - [ ] VPC Flow Logs (traffic monitoring)
 
 ### Cloud Load Balancing
+
 - [ ] HTTP(S) LB (Layer 7, global)
 - [ ] Network LB (Layer 4, extreme performance)
 - [ ] Internal LB (regional, private)
@@ -2278,6 +2389,7 @@ gcloud compute forwarding-rules create db-lb \
 - [ ] Pricing model
 
 ### Cloud Armor
+
 - [ ] Layer 7 DDoS/WAF protection
 - [ ] Works with Cloud Load Balancer
 - [ ] Security policies & rules
